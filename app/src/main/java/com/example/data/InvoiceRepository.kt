@@ -197,10 +197,8 @@ class InvoiceRepository(context: Context) {
         note = "نسخة احتياطية تلقائية يومية ($todayStr)"
       )
 
-      // 2. Export physical file to app backup directory
-      val backupDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "RoomDatabaseBackups/AutoDaily")
-      if (!backupDir.exists()) backupDir.mkdirs()
-      val file = File(backupDir, "Mamlaka_AutoBackup_$todayStr.json")
+      // 2. Export physical file and export to device internal storage
+      val fileName = "Mamlaka_AutoBackup_$todayStr.json"
       val json = roomBackupManager.buildBackupJson(
         invoices = savedInvoices,
         customers = customers,
@@ -209,20 +207,11 @@ class InvoiceRepository(context: Context) {
         nextReceiptVoucherNum = nextReceiptVoucherNum,
         nextPaymentVoucherNum = nextPaymentVoucherNum
       )
-      file.writeText(json)
 
-      // 3. Also export copy to Documents or Downloads if possible
-      try {
-        val publicDocs = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "Mamlaka_Backups")
-        if (!publicDocs.exists()) publicDocs.mkdirs()
-        if (publicDocs.exists() && publicDocs.canWrite()) {
-          val publicFile = File(publicDocs, "Mamlaka_AutoBackup_$todayStr.json")
-          publicFile.writeText(json)
-        }
-      } catch (_: Throwable) {}
+      val exportResult = roomBackupManager.exportJsonToInternalStorage(fileName, json)
 
       recordAutoDailyBackupCompleted(todayStr)
-      file
+      exportResult.file ?: File(context.filesDir, fileName)
     } catch (e: Exception) {
       null
     }

@@ -1,7 +1,12 @@
 package com.example.data.room
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.example.data.Customer
 import com.example.data.ExchangeRates
@@ -20,6 +25,14 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+data class StorageExportResult(
+  val success: Boolean,
+  val fileName: String,
+  val displayPath: String,
+  val file: File? = null,
+  val uri: Uri? = null
+)
 
 class RoomBackupManager(private val context: Context) {
   private val db = AppDatabase.getDatabase(context)
@@ -320,6 +333,75 @@ class RoomBackupManager(private val context: Context) {
     } catch (e: Exception) {
       null
     }
+  }
+
+  /**
+   * Exports backup JSON directly to the phone's internal storage (Downloads / Mamlaka_Backups)
+   * visible in device file managers without needing special storage permissions.
+   */
+  fun exportJsonToInternalStorage(fileName: String, jsonString: String): StorageExportResult {
+    var exportedDisplayPath = ""
+    var exportedFile: File? = null
+    var isSuccess = false
+    var targetUri: Uri? = null
+
+    // 1. Export to device internal storage (Download/Mamlaka_Backups) via MediaStore on Android 10+
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val resolver = context.contentResolver
+        val contentValues = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+          put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+          put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Mamlaka_Backups")
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        if (uri != null) {
+          resolver.openOutputStream(uri)?.use { os ->
+            os.write(jsonString.toByteArray(Charsets.UTF_8))
+            os.flush()
+          }
+          isSuccess = true
+          targetUri = uri
+          exportedDisplayPath = "وحدة التخزين الداخلية / Download / Mamlaka_Backups / $fileName"
+        }
+      } else {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val backupDir = File(downloadsDir, "Mamlaka_Backups")
+        if (!backupDir.exists()) backupDir.mkdirs()
+        val file = File(backupDir, fileName)
+        file.writeText(jsonString)
+        isSuccess = true
+        exportedFile = file
+        exportedDisplayPath = "وحدة التخزين الداخلية / Download / Mamlaka_Backups / $fileName"
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+
+    // 2. Guaranteed local file backup in app documents/downloads folder
+    try {
+      val localDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "Mamlaka_Backups")
+      if (!localDir.exists()) localDir.mkdirs()
+      val localFile = File(localDir, fileName)
+      localFile.writeText(jsonString)
+      if (!isSuccess) {
+        isSuccess = true
+        exportedFile = localFile
+        exportedDisplayPath = "وحدة التخزين الداخلية / Mamlaka_Backups / $fileName"
+      } else if (exportedFile == null) {
+        exportedFile = localFile
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+
+    return StorageExportResult(
+      success = isSuccess,
+      fileName = fileName,
+      displayPath = if (exportedDisplayPath.isNotBlank()) exportedDisplayPath else "وحدة التخزين الداخلية / Download / Mamlaka_Backups / $fileName",
+      file = exportedFile,
+      uri = targetUri
+    )
   }
 
   fun buildBackupJson(

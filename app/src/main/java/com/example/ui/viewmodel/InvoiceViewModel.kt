@@ -2324,6 +2324,49 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun saveBackupToInternalStorage(
+    context: Context,
+    onResult: (success: Boolean, fileName: String, displayPath: String, invCount: Int, custCount: Int) -> Unit
+  ) {
+    viewModelScope.launch {
+      try {
+        val invCount = repository.savedInvoices.size
+        val custCount = repository.customers.size
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ENGLISH).format(Date())
+        val fileName = "Mamlaka_Backup_$timeStamp.json"
+
+        // 1. Snapshot in Room
+        repository.roomBackupManager.createLocalRoomBackup(
+          title = "نسخة احتياطية يدوية - $timeStamp",
+          invoices = repository.savedInvoices,
+          customers = repository.customers,
+          storeConfig = repository.storeConfig,
+          exchangeRates = repository.exchangeRates,
+          nextReceiptVoucherNum = repository.nextReceiptVoucherNum,
+          nextPaymentVoucherNum = repository.nextPaymentVoucherNum,
+          note = "تم حفظها وتصديرها لوحدة التخزين الداخلية"
+        )
+
+        // 2. Build JSON
+        val json = repository.exportAllBackupJson()
+
+        // 3. Export to internal storage
+        val res = repository.roomBackupManager.exportJsonToInternalStorage(fileName, json)
+
+        if (res.success) {
+          showToast("✅ تم حفظ وتصدير النسخة الاحتياطية بنجاح إلى وحدة التخزين الداخلية")
+          onResult(true, fileName, res.displayPath, invCount, custCount)
+        } else {
+          showToast("❌ تعذر حفظ النسخة في وحدة التخزين")
+          onResult(false, fileName, "", invCount, custCount)
+        }
+      } catch (e: Exception) {
+        showToast("❌ خطأ: ${e.message}")
+        onResult(false, "", "", 0, 0)
+      }
+    }
+  }
+
   // ==========================================
   // إدارة تنبيهات ومواعيد العملاء
   // ==========================================

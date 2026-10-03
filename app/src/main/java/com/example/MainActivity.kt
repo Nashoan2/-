@@ -117,6 +117,10 @@ fun AlmamlakaApp(
     }
   }
 
+  LaunchedEffect(Unit) {
+    viewModel.performDailyAutoBackupIfNeeded(context)
+  }
+
   BackHandler(enabled = true) {
     if (uiState.isFormVisible && uiState.currentScreen == AppScreen.MAIN) {
       viewModel.closeInvoiceForm()
