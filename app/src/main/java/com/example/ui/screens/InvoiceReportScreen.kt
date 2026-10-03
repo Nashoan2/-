@@ -195,7 +195,9 @@ fun InvoiceReportScreen(
                 onExportPdf()
               } else {
                 PrintHelper.exportInvoiceToPdf(context, invoice, storeConfig, effectiveReportConfig) { file ->
-                  if (file != null) PrintHelper.sharePdf(context, file, "فاتورة رقم ${invoice.invNum}")
+                  if (file != null) {
+                    Toast.makeText(context, "✅ تم حفظ ملف PDF في وحدة التخزين الداخلية (Downloads)", Toast.LENGTH_LONG).show()
+                  }
                 }
               }
             },
@@ -207,8 +209,8 @@ fun InvoiceReportScreen(
               .height(42.dp)
           ) {
             Icon(
-              Icons.Default.Share,
-              contentDescription = "تصدير PDF",
+              Icons.Default.PictureAsPdf,
+              contentDescription = "حفظ PDF",
               tint = Color.White,
               modifier = Modifier.size(17.dp)
             )

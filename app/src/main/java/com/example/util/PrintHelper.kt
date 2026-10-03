@@ -1,9 +1,12 @@
 package com.example.util
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -11,6 +14,7 @@ import android.print.PdfPrintHelper
 import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintManager
+import android.provider.MediaStore
 import android.util.Base64
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -1369,8 +1373,10 @@ object PrintHelper {
                   outputFile,
                   object : PdfPrintHelper.Callback {
                     override fun onSuccess(file: File?) {
+                      val targetFile = file ?: outputFile
+                      saveToInternalDeviceStorage(context, targetFile, cleanFileName)
                       activeWebViews.remove(webView)
-                      mainHandler.post { onComplete(file ?: outputFile) }
+                      mainHandler.post { onComplete(targetFile) }
                     }
 
                     override fun onError(error: String?) {
@@ -1391,6 +1397,49 @@ object PrintHelper {
       } catch (e: Exception) {
         mainHandler.post { onComplete(null) }
       }
+    }
+  }
+
+  fun saveToInternalDeviceStorage(context: Context, sourceFile: File, cleanFileName: String) {
+    // 1. On Android 10+ (API 29+), insert via MediaStore into public Download/Mamlaka_Invoices in internal storage
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val resolver = context.contentResolver
+        val contentValues = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, cleanFileName)
+          put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+          put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Mamlaka_Invoices")
+          put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        if (uri != null) {
+          resolver.openOutputStream(uri)?.use { outStream ->
+            sourceFile.inputStream().use { inStream ->
+              inStream.copyTo(outStream)
+            }
+          }
+          contentValues.clear()
+          contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+          resolver.update(uri, contentValues, null, null)
+        }
+      }
+    } catch (_: Throwable) {}
+
+    // 2. Also copy directly to public standard Download/Mamlaka_Invoices or Documents/Mamlaka_Invoices
+    try {
+      val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+      val appDir = File(downloadsDir, "Mamlaka_Invoices")
+      if (!appDir.exists()) appDir.mkdirs()
+      val targetFile = File(appDir, cleanFileName)
+      sourceFile.copyTo(targetFile, overwrite = true)
+    } catch (_: Throwable) {
+      try {
+        val docsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val appDir = File(docsDir, "Mamlaka_Invoices")
+        if (!appDir.exists()) appDir.mkdirs()
+        val targetFile = File(appDir, cleanFileName)
+        sourceFile.copyTo(targetFile, overwrite = true)
+      } catch (_: Throwable) {}
     }
   }
 

@@ -78,13 +78,13 @@ fun ExportedPdfDialog(
           }
           Column {
             Text(
-              text = "تم تصدير ملف PDF بنجاح",
+              text = "تم حفظ ملف PDF في وحدة التخزين",
               fontWeight = FontWeight.Bold,
               fontSize = 17.sp,
               color = Color(0xFF1B5E20)
             )
             Text(
-              text = "المستند جاهز للمشاركة والطباعة والحفظ",
+              text = "تم حفظ الملف في وحدة التخزين الداخلية بنجاح",
               fontSize = 12.sp,
               color = Color.Gray
             )
@@ -116,7 +116,15 @@ fun ExportedPdfDialog(
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF37474F)
               )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = "المسار: ${info.storagePath}",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2E7D32)
+              )
               if (info.sizeFormatted.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                   text = "الحجم: ${info.sizeFormatted}",
                   fontSize = 12.sp,
@@ -127,39 +135,13 @@ fun ExportedPdfDialog(
           }
 
           Text(
-            text = "اختر الإجراء المطلوب:",
+            text = "خيارات إضافية للمستند المحفوظ:",
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
             color = Color(0xFF455A64)
           )
 
-          // 1. Share PDF (WhatsApp, Telegram, Mail, Drive, etc.)
-          Button(
-            onClick = {
-              PrintHelper.sharePdf(context, info.file, info.title)
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(46.dp)
-          ) {
-            Icon(
-              Icons.Default.Share,
-              contentDescription = "مشاركة",
-              tint = Color.White,
-              modifier = Modifier.size(19.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-              "📤 مشاركة عبر واتساب والتطبيقات",
-              fontWeight = FontWeight.Bold,
-              fontSize = 14.sp,
-              color = Color.White
-            )
-          }
-
-          // 2. Open / View PDF
+          // 1. Open / View PDF
           Button(
             onClick = {
               PrintHelper.openPdf(context, info.file)
@@ -185,7 +167,7 @@ fun ExportedPdfDialog(
             )
           }
 
-          // 3. Print
+          // 2. Print
           Button(
             onClick = {
               onDismiss()
@@ -214,12 +196,13 @@ fun ExportedPdfDialog(
         }
       },
       confirmButton = {
-        OutlinedButton(
+        Button(
           onClick = onDismiss,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
           shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+          contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
         ) {
-          Text("إغلاق", fontWeight = FontWeight.Bold, color = Color(0xFF555555))
+          Text("تم (إغلاق)", fontWeight = FontWeight.Bold, color = Color.White)
         }
       }
     )

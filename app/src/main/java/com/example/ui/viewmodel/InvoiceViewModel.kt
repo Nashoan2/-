@@ -43,7 +43,8 @@ data class ExportedPdfInfo(
   val file: File,
   val title: String,
   val sizeFormatted: String = "",
-  val source: String = "" // "invoice", "statement", "all_customers", "voucher"
+  val source: String = "", // "invoice", "statement", "all_customers", "voucher"
+  val storagePath: String = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
 )
 
 enum class AppScreen {
@@ -182,7 +183,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
   fun exportInvoiceToPdf(context: Context, invoice: InvoiceData, autoShare: Boolean = false, customReportConfig: ReportCustomizationConfig? = null) {
     val configToUse = customReportConfig ?: _uiState.value.reportCustomizationConfig
     _uiState.value = _uiState.value.copy(isExportingPdf = true)
-    showToast("⏳ جاري تجهيز وتصدير ملف PDF للفاتورة...")
+    showToast("⏳ جاري حفظ ملف PDF في وحدة التخزين الداخلية...")
     PrintHelper.exportInvoiceToPdf(context, invoice, _uiState.value.storeConfig, configToUse) { file ->
       _uiState.value = _uiState.value.copy(isExportingPdf = false)
       if (file != null && file.exists()) {
@@ -191,14 +192,13 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           file = file,
           title = "فاتورة رقم ${invoice.invNum.ifEmpty { "1" }}",
           sizeFormatted = sizeKb,
-          source = "invoice"
+          source = "invoice",
+          storagePath = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
         )
         _uiState.value = _uiState.value.copy(exportedPdf = info)
-        if (autoShare) {
-          PrintHelper.sharePdf(context, file, info.title)
-        }
+        showToast("✅ تم حفظ ملف PDF في وحدة التخزين الداخلية (Download/Mamlaka_Invoices)")
       } else {
-        showToast("❌ حدث خطأ أثناء تصدير ملف PDF للفاتورة.")
+        showToast("❌ حدث خطأ أثناء حفظ ملف PDF للفاتورة.")
       }
     }
   }
@@ -211,7 +211,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     autoShare: Boolean = false
   ) {
     _uiState.value = _uiState.value.copy(isExportingPdf = true)
-    showToast("⏳ جاري تجهيز وتصدير كشف الحساب بصيغة PDF...")
+    showToast("⏳ جاري حفظ كشف الحساب في وحدة التخزين الداخلية...")
     PrintHelper.exportStatementToPdf(context, customer, _uiState.value.storeConfig, startDateStr, endDateStr, _uiState.value.reportCustomizationConfig, _uiState.value.exchangeRates) { file ->
       _uiState.value = _uiState.value.copy(isExportingPdf = false)
       if (file != null && file.exists()) {
@@ -221,21 +221,20 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           file = file,
           title = "كشف حساب: ${customer.name}$periodText",
           sizeFormatted = sizeKb,
-          source = "statement"
+          source = "statement",
+          storagePath = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
         )
         _uiState.value = _uiState.value.copy(exportedPdf = info)
-        if (autoShare) {
-          PrintHelper.sharePdf(context, file, info.title)
-        }
+        showToast("✅ تم حفظ كشف الحساب في وحدة التخزين الداخلية (Download/Mamlaka_Invoices)")
       } else {
-        showToast("❌ حدث خطأ أثناء تصدير كشف الحساب إلى PDF.")
+        showToast("❌ حدث خطأ أثناء حفظ كشف الحساب في وحدة التخزين.")
       }
     }
   }
 
   fun exportAllCustomersToPdf(context: Context, autoShare: Boolean = false) {
     _uiState.value = _uiState.value.copy(isExportingPdf = true)
-    showToast("⏳ جاري تجهيز كشف جميع العملاء بصيغة PDF...")
+    showToast("⏳ جاري حفظ كشف جميع العملاء في وحدة التخزين الداخلية...")
     val sortedCustomers = _uiState.value.customers.sortedWith(
       compareByDescending<Customer> {
         ArabicNumberHelper.toEngDigits(it.accountNumber).toLongOrNull() ?: Long.MIN_VALUE
@@ -258,21 +257,20 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           file = file,
           title = "كشف حساب جميع العملاء",
           sizeFormatted = sizeKb,
-          source = "all_customers"
+          source = "all_customers",
+          storagePath = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
         )
         _uiState.value = _uiState.value.copy(exportedPdf = info)
-        if (autoShare) {
-          PrintHelper.sharePdf(context, file, info.title)
-        }
+        showToast("✅ تم حفظ كشف جميع العملاء في وحدة التخزين الداخلية (Download/Mamlaka_Invoices)")
       } else {
-        showToast("❌ حدث خطأ أثناء تصدير كشف العملاء إلى PDF.")
+        showToast("❌ حدث خطأ أثناء حفظ كشف العملاء في وحدة التخزين.")
       }
     }
   }
 
   fun exportCustomersWithBalanceToPdf(context: Context, autoShare: Boolean = false) {
     _uiState.value = _uiState.value.copy(isExportingPdf = true)
-    showToast("⏳ جاري تجهيز كشف حساب العملاء ذوي الأرصدة بصيغة PDF...")
+    showToast("⏳ جاري حفظ كشف حساب العملاء ذوي الأرصدة في وحدة التخزين الداخلية...")
     val customersWithBalance = _uiState.value.customers
       .filter { Math.abs(it.balance) > 0.001 }
       .sortedByDescending { it.balance }
@@ -291,21 +289,20 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           file = file,
           title = "كشف حساب العملاء (ذوي الأرصدة فقط)",
           sizeFormatted = sizeKb,
-          source = "customers_with_balance"
+          source = "customers_with_balance",
+          storagePath = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
         )
         _uiState.value = _uiState.value.copy(exportedPdf = info)
-        if (autoShare) {
-          PrintHelper.sharePdf(context, file, info.title)
-        }
+        showToast("✅ تم حفظ كشف العملاء ذوي الأرصدة في وحدة التخزين الداخلية (Download/Mamlaka_Invoices)")
       } else {
-        showToast("❌ حدث خطأ أثناء تصدير كشف العملاء ذوي الأرصدة إلى PDF.")
+        showToast("❌ حدث خطأ أثناء حفظ كشف العملاء ذوي الأرصدة.")
       }
     }
   }
 
   fun exportVoucherToPdf(context: Context, voucher: VoucherItem, autoShare: Boolean = false) {
     _uiState.value = _uiState.value.copy(isExportingPdf = true)
-    showToast("⏳ جاري تجهيز السند بصيغة PDF...")
+    showToast("⏳ جاري حفظ السند في وحدة التخزين الداخلية...")
     PrintHelper.exportVoucherToPdf(context, voucher, _uiState.value.storeConfig, _uiState.value.reportCustomizationConfig) { file ->
       _uiState.value = _uiState.value.copy(isExportingPdf = false)
       if (file != null && file.exists()) {
@@ -315,14 +312,13 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           file = file,
           title = "$typeTitle رقم ${voucher.voucherNum}",
           sizeFormatted = sizeKb,
-          source = "voucher"
+          source = "voucher",
+          storagePath = "وحدة التخزين الداخلية > Download > Mamlaka_Invoices"
         )
         _uiState.value = _uiState.value.copy(exportedPdf = info)
-        if (autoShare) {
-          PrintHelper.sharePdf(context, file, info.title)
-        }
+        showToast("✅ تم حفظ $typeTitle في وحدة التخزين الداخلية (Download/Mamlaka_Invoices)")
       } else {
-        showToast("❌ حدث خطأ أثناء تصدير السند إلى PDF.")
+        showToast("❌ حدث خطأ أثناء حفظ السند في وحدة التخزين.")
       }
     }
   }

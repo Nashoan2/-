@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -274,7 +275,9 @@ fun CustomerStatementScreen(
                     onExportPdf()
                   } else {
                     PrintHelper.exportStatementToPdf(context, customer, storeConfig, startDateStr, endDateStr, reportConfig, exchangeRates) { file ->
-                      if (file != null) PrintHelper.sharePdf(context, file, "كشف حساب: ${customer.name}")
+                      if (file != null) {
+                        Toast.makeText(context, "✅ تم حفظ كشف الحساب في وحدة التخزين الداخلية (Downloads)", Toast.LENGTH_LONG).show()
+                      }
                     }
                   }
                 },
@@ -290,7 +293,7 @@ fun CustomerStatementScreen(
                   horizontalArrangement = Arrangement.Center
                 ) {
                   Icon(
-                    imageVector = Icons.Default.Share,
+                    imageVector = Icons.Default.PictureAsPdf,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(17.dp)
