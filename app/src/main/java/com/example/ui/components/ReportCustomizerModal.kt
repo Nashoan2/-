@@ -1076,8 +1076,8 @@ private fun TabVisibilityElements(
       Triple("✍️ تفقيط المبلغ كتابة بالحروف", config.showAmountInWords, "amountInWords"),
       Triple("📦 بوكس بيانات الكرت والاشتراك (في الفاتورة)", config.showCardSubscriptionBox, "subscriptionBox"),
       Triple("💧 العلامة المائية في خلفية التقارير", config.showWatermark, "watermark"),
-      Triple("📋 الشروط والملاحظات الافتراضية أسفل الفاتورة", config.showTermsAndNotes, "termsAndNotes"),
-      Triple("✍️ خانات التوقيع (أمين الصندوق والمستلم)", config.showSignatures, "signatures"),
+      Triple("📋 الشروط والأحكام الافتراضية أسفل الفاتورة", config.showTermsAndNotes, "termsAndNotes"),
+      Triple("✍️ خانات التوقيع (توقيع البائع وتوقيع المشتري)", config.showSignatures, "signatures"),
       Triple("🛡️ ختم الاعتماد الرسمي (معتمد APPROVED)", config.showStampSeal, "stampSeal")
     )
 
@@ -1457,8 +1457,8 @@ private fun LiveReportPreviewCard(config: ReportCustomizationConfig) {
 
         if (config.showSignatures) {
           Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("توقيع المحاسب: ${config.accountantSignatureName.ifEmpty { "..........." }}", fontSize = (11 * config.fontScale).sp, color = tColor)
-            Text("توقيع المستلم: ...........", fontSize = (11 * config.fontScale).sp, color = tColor)
+            Text("توقيع البائع: ${config.accountantSignatureName.ifEmpty { "..........." }}", fontSize = (11 * config.fontScale).sp, color = tColor)
+            Text("توقيع المشتري: ...........", fontSize = (11 * config.fontScale).sp, color = tColor)
           }
         }
 

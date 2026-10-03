@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
@@ -377,14 +379,7 @@ fun TabCustomerReminders(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}
           storeName = uiState.storeConfig.storeNameAr.ifBlank { "المتجر" },
           onToggleComplete = { viewModel.toggleCustomerReminderCompleted(reminder.id) },
           onEdit = { reminderToEdit = reminder },
-          onDelete = { reminderToDelete = reminder },
-          onSendWhatsApp = {
-            NotificationHelper.sendWhatsAppReminder(
-              context,
-              reminder,
-              uiState.storeConfig.storeNameAr.ifBlank { "المتجر" }
-            )
-          }
+          onDelete = { reminderToDelete = reminder }
         )
       }
     }
@@ -443,8 +438,7 @@ fun ReminderCard(
   storeName: String,
   onToggleComplete: () -> Unit,
   onEdit: () -> Unit,
-  onDelete: () -> Unit,
-  onSendWhatsApp: () -> Unit
+  onDelete: () -> Unit
 ) {
   val now = System.currentTimeMillis()
   val isOverdue = !reminder.isCompleted && reminder.dueTimestamp <= now
@@ -600,13 +594,23 @@ fun ReminderCard(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(15.dp))
+          Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(15.dp))
           Text(
-            text = "تاريخ الاستحقاق: ${reminder.dueDate}",
+            text = "الموعد: ${reminder.dueDate}",
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Bold,
             color = if (isOverdue) Color(0xFFBE123C) else Color(0xFF4B5563)
           )
+          if (reminder.dueTime.isNotBlank()) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(14.dp))
+            Text(
+              text = reminder.dueTime,
+              fontSize = 11.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFF1D4ED8)
+            )
+          }
         }
 
         if (reminder.customerPhone.isNotBlank()) {
@@ -624,33 +628,13 @@ fun ReminderCard(
         }
       }
 
-      // السطر الرابع: أزرار العمليات (واتساب - إنجاز - تعديل - حذف)
+      // السطر الرابع: أزرار العمليات (إنجاز - تعديل - حذف)
       Row(
         modifier = Modifier
           .fillMaxWidth()
           .padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
       ) {
-        // زر إرسال واتساب / رسالة تذكير
-        if (reminder.customerPhone.isNotBlank()) {
-          Button(
-            onClick = onSendWhatsApp,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-            modifier = Modifier.weight(1.3f).height(36.dp)
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center
-            ) {
-              Text("💬", fontSize = 12.sp)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("إرسال تذكير", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-          }
-        }
-
         // زر تم السداد / غير مكتمل
         Button(
           onClick = onToggleComplete,
@@ -659,11 +643,11 @@ fun ReminderCard(
           ),
           shape = RoundedCornerShape(8.dp),
           contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-          modifier = Modifier.weight(1.1f).height(36.dp)
+          modifier = Modifier.weight(1.3f).height(36.dp)
         ) {
           Text(
             if (reminder.isCompleted) "إعادة فتح" else "تم السداد ✔️",
-            fontSize = 11.sp,
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
           )
@@ -674,10 +658,10 @@ fun ReminderCard(
           onClick = onEdit,
           shape = RoundedCornerShape(8.dp),
           contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-          modifier = Modifier.weight(0.9f).height(36.dp),
+          modifier = Modifier.weight(1f).height(36.dp),
           border = BorderStroke(1.dp, Color(0xFFD97706))
         ) {
-          Text("تعديل", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+          Text("تعديل الموعد", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
         }
 
         // زر حذف
@@ -717,7 +701,7 @@ fun CustomerReminderFormDialog(
   var note by remember { mutableStateOf(initialReminder?.note ?: "") }
   var selectedPreset by remember { mutableStateOf(initialReminder?.periodPreset ?: "أسبوع") }
 
-  // Calculation of Due Date based on Preset
+  // Calculation of Due Date and Time based on Preset
   var dueCalendar by remember {
     mutableStateOf(
       Calendar.getInstance().apply {
@@ -725,6 +709,9 @@ fun CustomerReminderFormDialog(
           timeInMillis = initialReminder.dueTimestamp
         } else {
           add(Calendar.DAY_OF_YEAR, 7) // default 1 week
+          set(Calendar.HOUR_OF_DAY, 10)
+          set(Calendar.MINUTE, 0)
+          set(Calendar.SECOND, 0)
         }
       }
     )
@@ -732,7 +719,13 @@ fun CustomerReminderFormDialog(
 
   fun updatePreset(preset: String) {
     selectedPreset = preset
-    val cal = Calendar.getInstance()
+    val currentHour = dueCalendar.get(Calendar.HOUR_OF_DAY)
+    val currentMinute = dueCalendar.get(Calendar.MINUTE)
+    val cal = Calendar.getInstance().apply {
+      set(Calendar.HOUR_OF_DAY, currentHour)
+      set(Calendar.MINUTE, currentMinute)
+      set(Calendar.SECOND, 0)
+    }
     when (preset) {
       "يوم" -> cal.add(Calendar.DAY_OF_YEAR, 1)
       "يومين" -> cal.add(Calendar.DAY_OF_YEAR, 2)
@@ -745,6 +738,7 @@ fun CustomerReminderFormDialog(
   }
 
   val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+  val timeFormat = SimpleDateFormat("hh:mm a", Locale.forLanguageTag("ar"))
   val displayDateFormat = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.forLanguageTag("ar"))
 
   AlertDialog(
@@ -935,37 +929,130 @@ fun CustomerReminderFormDialog(
           }
         }
 
-        // اختيار تاريخ مخصص
-        OutlinedButton(
-          onClick = {
-            DatePickerDialog(
-              context,
-              { _, y, m, d ->
-                val cal = Calendar.getInstance().apply {
-                  set(y, m, d, 23, 59, 59)
+        // تحديد التاريخ والوقت بدقة
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          // 1. زر اختيار التاريخ (DatePickerDialog)
+          OutlinedButton(
+            onClick = {
+              DatePickerDialog(
+                context,
+                { _, y, m, d ->
+                  val hour = dueCalendar.get(Calendar.HOUR_OF_DAY)
+                  val minute = dueCalendar.get(Calendar.MINUTE)
+                  val cal = Calendar.getInstance().apply {
+                    set(y, m, d, hour, minute, 0)
+                  }
+                  dueCalendar = cal
+                  selectedPreset = "مخصص"
+                },
+                dueCalendar.get(Calendar.YEAR),
+                dueCalendar.get(Calendar.MONTH),
+                dueCalendar.get(Calendar.DAY_OF_MONTH)
+              ).show()
+            },
+            modifier = Modifier
+              .weight(1.1f)
+              .height(42.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.2.dp, Color(0xFFD97706)),
+            contentPadding = PaddingValues(horizontal = 6.dp)
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Icon(Icons.Default.CalendarMonth, contentDescription = "التاريخ", tint = Color(0xFFD97706), modifier = Modifier.size(17.dp))
+              Text(
+                text = "التاريخ: ${dateFormat.format(dueCalendar.time)}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.5.sp,
+                color = Color(0xFF78350F)
+              )
+            }
+          }
+
+          // 2. زر اختيار الوقت (TimePickerDialog)
+          OutlinedButton(
+            onClick = {
+              TimePickerDialog(
+                context,
+                { _, hourOfDay, minute ->
+                  val cal = (dueCalendar.clone() as Calendar).apply {
+                    set(Calendar.HOUR_OF_DAY, hourOfDay)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                  }
+                  dueCalendar = cal
+                },
+                dueCalendar.get(Calendar.HOUR_OF_DAY),
+                dueCalendar.get(Calendar.MINUTE),
+                false // نظام 12 ساعة مع ص/م
+              ).show()
+            },
+            modifier = Modifier
+              .weight(0.9f)
+              .height(42.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.2.dp, Color(0xFF2563EB)),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFEFF6FF)),
+            contentPadding = PaddingValues(horizontal = 6.dp)
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Icon(Icons.Default.Schedule, contentDescription = "الوقت", tint = Color(0xFF2563EB), modifier = Modifier.size(17.dp))
+              Text(
+                text = "الوقت: ${timeFormat.format(dueCalendar.time)}",
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 11.5.sp,
+                color = Color(0xFF1D4ED8)
+              )
+            }
+          }
+        }
+
+        // أوقات سريعة لتسهيل وضبط الوقت بلمسة واحدة
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          val quickTimes = listOf(
+            Pair("09:00 ص", 9 to 0),
+            Pair("12:00 م", 12 to 0),
+            Pair("04:00 م", 16 to 0),
+            Pair("08:00 م", 20 to 0)
+          )
+          quickTimes.forEach { (label, time) ->
+            val isCurrentTime = dueCalendar.get(Calendar.HOUR_OF_DAY) == time.first && dueCalendar.get(Calendar.MINUTE) == time.second
+            Surface(
+              onClick = {
+                val cal = (dueCalendar.clone() as Calendar).apply {
+                  set(Calendar.HOUR_OF_DAY, time.first)
+                  set(Calendar.MINUTE, time.second)
+                  set(Calendar.SECOND, 0)
                 }
                 dueCalendar = cal
-                selectedPreset = "مخصص"
               },
-              dueCalendar.get(Calendar.YEAR),
-              dueCalendar.get(Calendar.MONTH),
-              dueCalendar.get(Calendar.DAY_OF_MONTH)
-            ).show()
-          },
-          modifier = Modifier.fillMaxWidth().height(38.dp),
-          shape = RoundedCornerShape(8.dp)
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(16.dp))
-            Text(
-              "تاريخ الاستحقاق المحدد: ${dateFormat.format(dueCalendar.time)}",
-              fontWeight = FontWeight.Bold,
-              fontSize = 12.5.sp,
-              color = Color(0xFF78350F)
-            )
+              shape = RoundedCornerShape(6.dp),
+              color = if (isCurrentTime) Color(0xFF2563EB) else Color(0xFFF1F5F9),
+              border = BorderStroke(0.8.dp, if (isCurrentTime) Color(0xFF1D4ED8) else Color(0xFFCBD5E1)),
+              modifier = Modifier
+                .weight(1f)
+                .height(28.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Text(
+                  text = label,
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = if (isCurrentTime) Color.White else Color(0xFF334155)
+                )
+              }
+            }
           }
         }
 
@@ -986,6 +1073,7 @@ fun CustomerReminderFormDialog(
         onClick = {
           val customer = selectedCustomer ?: return@Button
           val amountVal = amountStr.toDoubleOrNull() ?: 0.0
+          val formattedTime = timeFormat.format(dueCalendar.time)
           val rem = CustomerReminder(
             id = initialReminder?.id ?: java.util.UUID.randomUUID().toString(),
             customerAccount = customer.accountNumber,
@@ -997,6 +1085,7 @@ fun CustomerReminderFormDialog(
             currency = "YER",
             createdAt = initialReminder?.createdAt ?: ArabicNumberHelper.formatDateTime(),
             dueDate = dateFormat.format(dueCalendar.time),
+            dueTime = formattedTime,
             dueTimestamp = dueCalendar.timeInMillis,
             periodPreset = selectedPreset,
             isCompleted = initialReminder?.isCompleted ?: false,

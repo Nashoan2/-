@@ -138,6 +138,7 @@ class InvoiceRepository(context: Context) {
             currency = o.optString("currency", "YER"),
             createdAt = o.optString("createdAt", ""),
             dueDate = o.optString("dueDate", ""),
+            dueTime = o.optString("dueTime", ""),
             dueTimestamp = o.optLong("dueTimestamp", 0L),
             periodPreset = o.optString("periodPreset", "أسبوع"),
             isCompleted = o.optBoolean("isCompleted", false),
@@ -167,6 +168,7 @@ class InvoiceRepository(context: Context) {
           put("currency", r.currency)
           put("createdAt", r.createdAt)
           put("dueDate", r.dueDate)
+          put("dueTime", r.dueTime)
           put("dueTimestamp", r.dueTimestamp)
           put("periodPreset", r.periodPreset)
           put("isCompleted", r.isCompleted)
@@ -478,6 +480,13 @@ class InvoiceRepository(context: Context) {
       } else {
         obj.optBoolean("showBranch", false)
       }
+      val hasMigratedSignaturesAndTerms = prefs.getBoolean("migrated_hide_signatures_and_terms_v1", false)
+      val (termsVal, sigsVal) = if (!hasMigratedSignaturesAndTerms) {
+        prefs.edit().putBoolean("migrated_hide_signatures_and_terms_v1", true).apply()
+        Pair(false, false)
+      } else {
+        Pair(obj.optBoolean("showTermsAndNotes", false), obj.optBoolean("showSignatures", false))
+      }
       ReportCustomizationConfig(
         fontScalePercent = obj.optInt("fontScalePercent", 100),
         fontFamily = obj.optString("fontFamily", "Cairo"),
@@ -501,8 +510,8 @@ class InvoiceRepository(context: Context) {
         showCustomerAccountNumber = obj.optBoolean("showCustomerAccountNumber", true),
         showBranch = branchVal,
         showAmountInWords = obj.optBoolean("showAmountInWords", true),
-        showTermsAndNotes = obj.optBoolean("showTermsAndNotes", true),
-        showSignatures = obj.optBoolean("showSignatures", true),
+        showTermsAndNotes = termsVal,
+        showSignatures = sigsVal,
         showWatermark = obj.optBoolean("showWatermark", true),
         showCardSubscriptionBox = obj.optBoolean("showCardSubscriptionBox", true),
         customHeaderTitle = obj.optString("customHeaderTitle", ""),

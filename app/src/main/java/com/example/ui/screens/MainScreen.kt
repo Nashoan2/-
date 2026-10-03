@@ -228,13 +228,40 @@ fun MainScreen(viewModel: InvoiceViewModel) {
             // محدد السنة المالية الحالية مع زر الحفظ عند التبديل
             var selectedYearInHeader by remember(uiState.activeFiscalYear) { mutableStateOf(uiState.activeFiscalYear) }
             var yearMenuExpanded by remember { mutableStateOf(false) }
-            var showAddYearDialog by remember { mutableStateOf(false) }
-            var newYearInputText by remember { mutableStateOf("") }
 
             Row(
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+              // شارة تنبيه المواعيد المستحقة
+              val dueRemindersCount = remember(uiState.customerReminders) {
+                uiState.customerReminders.count { !it.isCompleted && it.dueTimestamp <= System.currentTimeMillis() }
+              }
+              if (dueRemindersCount > 0) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = Color(0x33F59E0B),
+                  border = BorderStroke(1.2.dp, Color(0xFFF59E0B)),
+                  modifier = Modifier
+                    .height(29.dp)
+                    .clickable { viewModel.openCustomerRemindersShortcut() }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                  ) {
+                    Text("🔔", fontSize = 12.sp)
+                    Text(
+                      text = "$dueRemindersCount",
+                      color = Color(0xFFFDE68A),
+                      fontSize = 11.5.sp,
+                      fontWeight = FontWeight.ExtraBold
+                    )
+                  }
+                }
+              }
+
               // إذا تم اختيار سنة أخرى غير النشطة: يظهر زر "حفظ" فوراً
               if (selectedYearInHeader != uiState.activeFiscalYear) {
                 val saveInteraction = remember { MutableInteractionSource() }
@@ -302,7 +329,13 @@ fun MainScreen(viewModel: InvoiceViewModel) {
                   expanded = yearMenuExpanded,
                   onDismissRequest = { yearMenuExpanded = false }
                 ) {
-                  uiState.availableFiscalYears.forEach { yr ->
+                  val displayedYears = uiState.availableFiscalYears
+                    .filter { it <= uiState.activeFiscalYear }
+                    .distinct()
+                    .sortedDescending()
+
+                  displayedYears.forEach { yr ->
+                    val isCurrent = yr == uiState.activeFiscalYear
                     DropdownMenuItem(
                       text = {
                         Row(
@@ -311,15 +344,26 @@ fun MainScreen(viewModel: InvoiceViewModel) {
                         ) {
                           Text(
                             text = "سنة $yr",
-                            fontWeight = if (yr == selectedYearInHeader) FontWeight.Black else FontWeight.Normal,
-                            color = if (yr == uiState.activeFiscalYear) Color(0xFF16A34A) else Color.Unspecified
+                            fontWeight = if (yr == selectedYearInHeader) FontWeight.Black else FontWeight.Bold,
+                            color = if (isCurrent) Color(0xFF16A34A) else Color(0xFF334155)
                           )
-                          if (yr == uiState.activeFiscalYear) {
+                          if (isCurrent) {
                             Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFDCFCE7)) {
                               Text(
                                 text = "الحالية",
-                                fontSize = 9.sp,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = Color(0xFF15803D),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                              )
+                            }
+                          } else {
+                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF1F5F9)) {
+                              Text(
+                                text = "مقفلة",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B),
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                               )
                             }
@@ -332,92 +376,8 @@ fun MainScreen(viewModel: InvoiceViewModel) {
                       }
                     )
                   }
-
-                  HorizontalDivider()
-
-                  DropdownMenuItem(
-                    text = {
-                      Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                      ) {
-                        Text("➕", fontSize = 12.sp)
-                        Text(
-                          text = "إضافة سنة مالية أخرى...",
-                          fontSize = 12.sp,
-                          color = Color(0xFF0284C7),
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
-                    },
-                    onClick = {
-                      yearMenuExpanded = false
-                      newYearInputText = (uiState.activeFiscalYear - 1).toString()
-                      showAddYearDialog = true
-                    }
-                  )
-
-                  DropdownMenuItem(
-                    text = {
-                      Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                      ) {
-                        Text("🔒", fontSize = 13.sp)
-                        Text(
-                          text = "الإقفال السنوي وفتح سنة جديدة...",
-                          fontSize = 12.sp,
-                          color = Color(0xFFBE123C),
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
-                    },
-                    onClick = {
-                      yearMenuExpanded = false
-                      viewModel.setYearEndClosingModalVisible(true)
-                    }
-                  )
                 }
               }
-            }
-
-            if (showAddYearDialog) {
-              AlertDialog(
-                onDismissRequest = { showAddYearDialog = false },
-                title = { Text("إضافة سنة مالية", fontWeight = FontWeight.Bold) },
-                text = {
-                  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("أدخل رقم السنة المالية التي ترغب في الاطلاع على سجلاتها أو فتحها:", fontSize = 12.5.sp)
-                    OutlinedTextField(
-                      value = newYearInputText,
-                      onValueChange = { if (it.length <= 4) newYearInputText = it },
-                      label = { Text("السنة (مثال: 2024)") },
-                      singleLine = true,
-                      modifier = Modifier.fillMaxWidth()
-                    )
-                  }
-                },
-                confirmButton = {
-                  Button(
-                    onClick = {
-                      val yr = newYearInputText.toIntOrNull()
-                      if (yr != null && yr in 1990..2100) {
-                        viewModel.addFiscalYear(yr)
-                        selectedYearInHeader = yr
-                        showAddYearDialog = false
-                      }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
-                  ) {
-                    Text("إضافة واختيار")
-                  }
-                },
-                dismissButton = {
-                  TextButton(onClick = { showAddYearDialog = false }) {
-                    Text("إلغاء")
-                  }
-                }
-              )
             }
 
             // اسم المتجر (ينقل إلى الإعدادات عند الضغط عليه)
@@ -454,6 +414,96 @@ fun MainScreen(viewModel: InvoiceViewModel) {
 
       // إذا كانت استمارة الفاتورة مغلقة: نعرض الواجهة الرئيسية المطابقة تماماً للصورة
       if (!uiState.isFormVisible) {
+        // شعار التنبيه للمواعيد المستحقة في واجهة التطبيق الرئيسية
+        val dueReminders = remember(uiState.customerReminders) {
+          uiState.customerReminders.filter { !it.isCompleted && it.dueTimestamp <= System.currentTimeMillis() }
+        }
+        var isReminderBannerDismissed by remember { mutableStateOf(false) }
+
+        if (dueReminders.isNotEmpty() && !isReminderBannerDismissed) {
+          Card(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(bottom = 12.dp)
+              .clickable { viewModel.openCustomerRemindersShortcut() },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF261D11)),
+            border = BorderStroke(1.5.dp, Color(0xFFF59E0B))
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFD97706)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text("🔔", fontSize = 18.sp)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "شعار تنبيه: لديك ${dueReminders.size} مواعيد مستحقة!",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.5.sp,
+                    color = Color(0xFFFDE68A)
+                  )
+                  val firstRem = dueReminders.first()
+                  val timeInfo = if (firstRem.dueTime.isNotBlank()) " | ${firstRem.dueTime}" else ""
+                  Text(
+                    text = "${firstRem.customerName}: ${firstRem.title}$timeInfo",
+                    fontSize = 11.5.sp,
+                    color = Color(0xFFE2E8F0),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFD97706),
+                  modifier = Modifier.clickable { viewModel.openCustomerRemindersShortcut() }
+                ) {
+                  Text(
+                    text = "عرض",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.5.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                  )
+                }
+
+                IconButton(
+                  onClick = { isReminderBannerDismissed = true },
+                  modifier = Modifier.size(24.dp)
+                ) {
+                  Icon(
+                    Icons.Default.Close,
+                    contentDescription = "إغلاق التنبيه",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
         // 2. شبكة الاختصارات السريعة (2x2) مطابقة تماماً للصورة
         val allConfigShortcuts = uiState.uiCustomizationConfig.buttons.filter { it.isQuickShortcut }
         val defaultFourIds = listOf("CURRENCY_CONVERTER", "ALL_CUSTOMERS", "PERCENTAGE_CALCULATOR", "FULL_CALCULATOR")

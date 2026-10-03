@@ -1655,7 +1655,14 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     return repository.getNextAccountNumber()
   }
 
-  fun addCustomer(name: String, phone: String, address: String, initialBalance: Double, customAccount: String = ""): Boolean {
+  fun addCustomer(
+    name: String,
+    phone: String,
+    address: String,
+    initialBalance: Double,
+    customAccount: String = "",
+    currency: String = "YER"
+  ): Boolean {
     if (name.isBlank()) {
       showToast("❌ يرجى إدخال اسم العميل.")
       return false
@@ -1675,7 +1682,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           date = ArabicNumberHelper.formatDateTime(),
           type = "افتتاح",
           amount = initialBalance,
-          currency = "YER",
+          currency = currency,
           note = "افتتاحي",
           balanceAfter = initialBalance
         )
@@ -1703,7 +1710,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     newName: String,
     newPhone: String,
     newAddress: String,
-    newInitialBalance: Double? = null
+    newInitialBalance: Double? = null,
+    newCurrency: String? = null
   ) {
     val clean = ArabicNumberHelper.toEngDigits(account).trim()
     val idx = repository.customers.indexOfFirst { ArabicNumberHelper.toEngDigits(it.accountNumber).trim() == clean }
@@ -1719,6 +1727,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           } else {
             updatedTransactions[openIdx] = updatedTransactions[openIdx].copy(
               amount = newInitialBalance,
+              currency = newCurrency ?: updatedTransactions[openIdx].currency,
               note = "افتتاحي"
             )
           }
@@ -1727,7 +1736,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
             date = ArabicNumberHelper.formatDateTime(),
             type = "افتتاح",
             amount = newInitialBalance,
-            currency = "USD",
+            currency = newCurrency ?: "YER",
             note = "افتتاحي",
             balanceAfter = newInitialBalance
           )

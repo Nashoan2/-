@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.AppThemeCustomizerModal
+import com.example.ui.components.DueRemindersDialog
 import com.example.ui.components.ExitConfirmDialog
 import com.example.ui.components.ExportedPdfDialog
 import com.example.ui.components.ReportCustomizerModal
@@ -151,6 +152,7 @@ fun AlmamlakaApp(
             storeConfig = uiState.storeConfig,
             reportConfig = uiState.reportCustomizationConfig,
             onToggleTerms = { enabled -> viewModel.toggleReportElement("termsAndNotes", enabled) },
+            onToggleSignatures = { enabled -> viewModel.toggleReportElement("signatures", enabled) },
             onExportPdf = { viewModel.exportInvoiceToPdf(context, inv) },
             onOpenCustomerDisplay = { viewModel.openCustomerDisplayMode(inv) },
             onBack = { viewModel.navigateTo(AppScreen.MAIN) }
@@ -168,6 +170,7 @@ fun AlmamlakaApp(
             reportConfig = uiState.reportCustomizationConfig,
             customer = cust,
             onToggleTerms = { enabled -> viewModel.toggleReportElement("termsAndNotes", enabled) },
+            onToggleSignatures = { enabled -> viewModel.toggleReportElement("signatures", enabled) },
             onOpenClassicReport = { viewModel.openInvoiceReport(inv) },
             onExportPdf = { viewModel.exportInvoiceToPdf(context, inv) },
             onBack = { viewModel.navigateTo(AppScreen.MAIN) }
@@ -288,6 +291,20 @@ fun AlmamlakaApp(
         viewModel = viewModel,
         onDismiss = { viewModel.setYearEndClosingModalVisible(false) }
       )
+    }
+
+    // Due Reminders Alert Dialog upon entering the app
+    if (uiState.showDueRemindersAlert) {
+      val dueReminders = remember(uiState.customerReminders) {
+        uiState.customerReminders.filter { !it.isCompleted && it.dueTimestamp <= System.currentTimeMillis() }
+      }
+      if (dueReminders.isNotEmpty()) {
+        DueRemindersDialog(
+          dueReminders = dueReminders,
+          onOpenReminders = { viewModel.openCustomerRemindersShortcut() },
+          onDismiss = { viewModel.dismissDueRemindersAlert() }
+        )
+      }
     }
 
     // Exported PDF Success & Action Dialog

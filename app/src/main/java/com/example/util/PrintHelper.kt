@@ -61,9 +61,14 @@ object PrintHelper {
   private fun getSignaturesHtml(reportConfig: ReportCustomizationConfig, storeConfig: StoreConfig): String {
     if (!reportConfig.showSignatures) return ""
     val accountantTitle = if (reportConfig.accountantSignatureName.isNotBlank()) {
-      "توقيع المسؤول / أمين الصندوق (${reportConfig.accountantSignatureName})"
+      "توقيع البائع (${reportConfig.accountantSignatureName})"
     } else {
-      "توقيع المسؤول / أمين الصندوق"
+      "توقيع البائع"
+    }
+    val buyerTitle = if (reportConfig.managerSignatureName.isNotBlank()) {
+      "توقيع المشتري (${reportConfig.managerSignatureName})"
+    } else {
+      "توقيع المشتري"
     }
     return """
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;margin-bottom:8px;padding:12px 20px 6px 20px;border-top:1.5px dashed ${reportConfig.tableBorderColorHex};">
@@ -81,7 +86,7 @@ object PrintHelper {
           </div>
         """ else """<div style="width:24%;"></div>"""}
         <div style="text-align:center;width:38%;">
-          <div style="font-size:${12.5 * reportConfig.fontScale}px;font-weight:800;color:${reportConfig.primaryTextColorHex};margin-bottom:26px;">توقيع المستلم / العميل</div>
+          <div style="font-size:${12.5 * reportConfig.fontScale}px;font-weight:800;color:${reportConfig.primaryTextColorHex};margin-bottom:26px;">$buyerTitle</div>
           <div style="border-top:1.5px solid #555;width:80%;margin:0 auto;"></div>
         </div>
       </div>

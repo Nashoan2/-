@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -393,38 +392,21 @@ fun RoomBackupModal(
 
           Spacer(modifier = Modifier.height(6.dp))
 
-          Row(
+          // 3. نسخ كود النسخة JSON
+          BackupActionButtonCard(
+            title = "نسخ كود النسخة الاحتياطية",
+            subtitle = "نسخ كود JSON كاملاً إلى الحافظة",
+            icon = Icons.Default.ContentCopy,
+            containerColor = Color(0xFF6D28D9),
+            textColor = Color.White,
+            iconColor = Color.White,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            // 3. تصدير ومشاركة
-            BackupActionButtonCard(
-              title = "مشاركة النسخة",
-              subtitle = "واتساب، إيميل، درايف",
-              icon = Icons.Default.Share,
-              containerColor = Color(0xFF0F766E),
-              textColor = Color.White,
-              iconColor = Color.White,
-              modifier = Modifier.weight(1f),
-              onClick = { viewModel.exportAndShareBackup(context) }
-            )
-
-            // 4. نسخ كود النسخة JSON
-            BackupActionButtonCard(
-              title = "نسخ كود النسخة",
-              subtitle = "نسخ JSON للحافظة",
-              icon = Icons.Default.ContentCopy,
-              containerColor = Color(0xFF6D28D9),
-              textColor = Color.White,
-              iconColor = Color.White,
-              modifier = Modifier.weight(1f),
-              onClick = {
-                val json = viewModel.exportBackup()
-                clipboardManager.setText(AnnotatedString(json))
-                viewModel.showToast("📋 تم نسخ كود النسخة الاحتياطية إلى الحافظة بنجاح!")
-              }
-            )
-          }
+            onClick = {
+              val json = viewModel.exportBackup()
+              clipboardManager.setText(AnnotatedString(json))
+              viewModel.showToast("📋 تم نسخ كود النسخة الاحتياطية إلى الحافظة بنجاح!")
+            }
+          )
 
           Spacer(modifier = Modifier.height(10.dp))
 

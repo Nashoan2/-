@@ -516,6 +516,7 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
   var phone by remember { mutableStateOf("") }
   var address by remember { mutableStateOf("") }
   var balanceStr by remember { mutableStateOf("") }
+  var currency by remember { mutableStateOf("YER") }
   var isFormVisible by remember { mutableStateOf(true) }
   var savedCustomerAccount by remember { mutableStateOf("") }
 
@@ -539,6 +540,8 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
     if (!isFormVisible) {
       val savedCustomer = uiState.customers.find { it.accountNumber == savedCustomerAccount }
       if (savedCustomer != null) {
+        val openTx = savedCustomer.transactions.find { it.type == "افتتاح" }
+        val openCurr = openTx?.currency ?: currency
         Card(
           modifier = Modifier.fillMaxWidth(),
           shape = RoundedCornerShape(10.dp),
@@ -556,7 +559,7 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
             Text("• اسم العميل: ${savedCustomer.name}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             if (savedCustomer.phone.isNotBlank()) Text("• رقم الهاتف: ${savedCustomer.phone}", fontSize = 13.sp)
             if (savedCustomer.address.isNotBlank()) Text("• العنوان: ${savedCustomer.address}", fontSize = 13.sp)
-            if (savedCustomer.balance != 0.0) Text("• افتتاحي: ${savedCustomer.balance}", fontSize = 13.sp)
+            if (savedCustomer.balance != 0.0) Text("• افتتاحي: ${savedCustomer.balance} $openCurr", fontSize = 13.sp)
           }
         }
       }
@@ -573,6 +576,8 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
               phone = savedCustomer.phone
               address = savedCustomer.address
               balanceStr = if (savedCustomer.balance != 0.0) savedCustomer.balance.toString() else ""
+              val openTx = savedCustomer.transactions.find { it.type == "افتتاح" }
+              currency = openTx?.currency ?: "YER"
             }
             isFormVisible = true
           },
@@ -592,6 +597,7 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
             phone = ""
             address = ""
             balanceStr = ""
+            currency = "YER"
             savedCustomerAccount = ""
             isFormVisible = true
           },
@@ -607,31 +613,88 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
     } else {
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
       ) {
-        Column(modifier = Modifier.weight(1f)) {
-          Text("رقم حساب العميل", fontWeight = FontWeight.ExtraBold, fontSize = 13.5.sp, color = Color(0xFF111827))
+        // 1. رقم العميل (مُصغر)
+        Column(modifier = Modifier.weight(0.85f)) {
+          Text("رقم العميل", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF111827))
           Spacer(modifier = Modifier.height(2.dp))
           OutlinedTextField(
             value = customAccount,
             onValueChange = { customAccount = it },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(fontSize = 16.5.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black),
-            colors = mandatoryTextFieldColors()
+            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black, textAlign = TextAlign.Center),
+            colors = mandatoryTextFieldColors(),
+            singleLine = true
           )
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-          Text("افتتاحي (اختياري)", fontWeight = FontWeight.ExtraBold, fontSize = 13.5.sp, color = Color(0xFF111827))
+        // 2. رمز العملة (بجانب رقم العميل مباشرة)
+        Column(modifier = Modifier.width(76.dp)) {
+          var currMenuExpanded by remember { mutableStateOf(false) }
+          Text("العملة", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF111827))
+          Spacer(modifier = Modifier.height(2.dp))
+          Box {
+            Surface(
+              onClick = { currMenuExpanded = true },
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFF1F5F9),
+              border = BorderStroke(1.2.dp, Color(0xFF94A3B8)),
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+              ) {
+                Text(
+                  text = currency,
+                  fontSize = 13.5.sp,
+                  fontWeight = FontWeight.Black,
+                  color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("▾", fontSize = 12.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
+              }
+            }
+            DropdownMenu(
+              expanded = currMenuExpanded,
+              onDismissRequest = { currMenuExpanded = false }
+            ) {
+              DropdownMenuItem(
+                text = { Text("YER", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                onClick = { currency = "YER"; currMenuExpanded = false }
+              )
+              DropdownMenuItem(
+                text = { Text("SAR", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                onClick = { currency = "SAR"; currMenuExpanded = false }
+              )
+              DropdownMenuItem(
+                text = { Text("$", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                onClick = { currency = "$"; currMenuExpanded = false }
+              )
+            }
+          }
+        }
+
+        // 3. الرصيد الافتتاحي (اختياري)
+        Column(modifier = Modifier.weight(1.2f)) {
+          Text("افتتاحي (اختياري)", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF111827))
           Spacer(modifier = Modifier.height(2.dp))
           OutlinedTextField(
             value = balanceStr,
             onValueChange = { balanceStr = it },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(fontSize = 16.5.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black),
-            colors = mandatoryTextFieldColors()
+            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black),
+            colors = mandatoryTextFieldColors(),
+            singleLine = true
           )
         }
       }
@@ -671,10 +734,24 @@ fun TabAddCustomer(viewModel: InvoiceViewModel) {
         onClick = {
           if (savedCustomerAccount.isNotBlank() && uiState.customers.any { it.accountNumber == savedCustomerAccount } && customAccount == savedCustomerAccount) {
             val bal = balanceStr.toDoubleOrNull() ?: 0.0
-            viewModel.editCustomer(savedCustomerAccount, name, phone, address, bal)
+            viewModel.editCustomer(
+              account = savedCustomerAccount,
+              newName = name,
+              newPhone = phone,
+              newAddress = address,
+              newInitialBalance = bal,
+              newCurrency = currency
+            )
             isFormVisible = false
           } else {
-            val ok = viewModel.addCustomer(name, phone, address, balanceStr.toDoubleOrNull() ?: 0.0, customAccount)
+            val ok = viewModel.addCustomer(
+              name = name,
+              phone = phone,
+              address = address,
+              initialBalance = balanceStr.toDoubleOrNull() ?: 0.0,
+              customAccount = customAccount,
+              currency = currency
+            )
             if (ok) {
               val cleanCustom = ArabicNumberHelper.toEngDigits(customAccount).trim()
               savedCustomerAccount = cleanCustom.ifEmpty { viewModel.uiState.value.customers.lastOrNull()?.accountNumber ?: "" }

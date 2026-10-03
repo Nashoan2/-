@@ -14,6 +14,7 @@ fun CustomerInvoiceDisplayScreen(
   customer: Customer? = null,
   onOpenClassicReport: () -> Unit,
   onToggleTerms: ((Boolean) -> Unit)? = null,
+  onToggleSignatures: ((Boolean) -> Unit)? = null,
   onExportPdf: () -> Unit,
   onBack: () -> Unit
 ) {
@@ -25,6 +26,7 @@ fun CustomerInvoiceDisplayScreen(
     initialDisplayMode = true,
     onOpenClassicReport = onOpenClassicReport,
     onToggleTerms = onToggleTerms,
+    onToggleSignatures = onToggleSignatures,
     onExportPdf = onExportPdf,
     onBack = onBack
   )

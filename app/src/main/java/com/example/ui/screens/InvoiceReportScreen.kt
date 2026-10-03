@@ -92,6 +92,7 @@ fun InvoiceReportScreen(
   reportConfig: ReportCustomizationConfig = ReportCustomizationConfig(),
   initialDisplayMode: Boolean = false,
   onToggleTerms: ((Boolean) -> Unit)? = null,
+  onToggleSignatures: ((Boolean) -> Unit)? = null,
   onExportPdf: (() -> Unit)? = null,
   onOpenCustomerDisplay: (() -> Unit)? = null,
   onOpenClassicReport: (() -> Unit)? = null,
@@ -1214,7 +1215,7 @@ fun InvoiceReportScreen(
               ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                   Text(
-                    text = "توقيع المحاسب / أمين الصندوق",
+                    text = "توقيع البائع",
                     fontSize = (12 * fontScale).sp,
                     fontWeight = FontWeight.Bold,
                     color = headerColor
@@ -1264,7 +1265,7 @@ fun InvoiceReportScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                   Text(
-                    text = "توقيع المستلم / العميل",
+                    text = "توقيع المشتري",
                     fontSize = (12 * fontScale).sp,
                     fontWeight = FontWeight.Bold,
                     color = headerColor

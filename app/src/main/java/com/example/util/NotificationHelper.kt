@@ -64,13 +64,14 @@ object NotificationHelper {
       if (dueReminders.size == 1) {
         val rem = dueReminders.first()
         val amountStr = if (rem.amountDue > 0) " بمبلغ ${ArabicNumberHelper.formatAmount(rem.amountDue)} $" else ""
+        val timeStr = if (rem.dueTime.isNotBlank()) " الساعة ${rem.dueTime}" else ""
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
           .setSmallIcon(R.mipmap.ic_launcher)
           .setContentTitle("⏰ تذكير مستحق: ${rem.customerName}")
-          .setContentText("موعد استحقاق (${rem.title})$amountStr للعميل ${rem.customerName}")
+          .setContentText("موعد استحقاق (${rem.title})$amountStr للعميل ${rem.customerName} ($timeStr)")
           .setStyle(
             NotificationCompat.BigTextStyle()
-              .bigText("انتهت مهلة المتابعة المحددة للعميل (${rem.customerName})$amountStr.\nالبيان: ${rem.title}\n${if (rem.note.isNotBlank()) "ملاحظات: ${rem.note}" else ""}")
+              .bigText("انتهت مهلة المتابعة المحددة للعميل (${rem.customerName})$amountStr بتاريخ ${rem.dueDate}$timeStr.\nالبيان: ${rem.title}\n${if (rem.note.isNotBlank()) "ملاحظات: ${rem.note}" else ""}")
           )
           .setPriority(NotificationCompat.PRIORITY_HIGH)
           .setContentIntent(pendingIntent)
@@ -102,11 +103,12 @@ object NotificationHelper {
   fun sendWhatsAppReminder(context: Context, reminder: CustomerReminder, storeName: String) {
     val cleanPhone = ArabicNumberHelper.toEngDigits(reminder.customerPhone).replace(Regex("[^0-9+]"), "")
     val amountText = if (reminder.amountDue > 0) " بمبلغ قدره (${ArabicNumberHelper.formatAmount(reminder.amountDue)} $)" else ""
+    val timeText = if (reminder.dueTime.isNotBlank()) " في تمام الساعة ${reminder.dueTime}" else ""
     val message = """
       السلام عليكم ورحمة الله وبركاته،
       الأخ الكريم / ${reminder.customerName} المحترم،
       
-      نود تذكيركم بموعد (${reminder.title})$amountText بتاريخ ${reminder.dueDate}.
+      نود تذكيركم بموعد (${reminder.title})$amountText بتاريخ ${reminder.dueDate}$timeText.
       ${if (reminder.note.isNotBlank()) "ملاحظة: ${reminder.note}\n" else ""}
       شاكرين ومقدرين حسن تعاونكم الدائم معنا.
       

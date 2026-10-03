@@ -555,8 +555,8 @@ data class ReportCustomizationConfig(
   val showCustomerAccountNumber: Boolean = true,
   val showBranch: Boolean = false,
   val showAmountInWords: Boolean = true,
-  val showTermsAndNotes: Boolean = true,
-  val showSignatures: Boolean = true,
+  val showTermsAndNotes: Boolean = false,
+  val showSignatures: Boolean = false,
   val showWatermark: Boolean = true,
   val showCardSubscriptionBox: Boolean = true,
 
@@ -584,6 +584,7 @@ data class CustomerReminder(
   val currency: String = "YER",
   val createdAt: String = "",
   val dueDate: String = "",
+  val dueTime: String = "",
   val dueTimestamp: Long = 0L,
   val periodPreset: String = "أسبوع",
   val isCompleted: Boolean = false,
