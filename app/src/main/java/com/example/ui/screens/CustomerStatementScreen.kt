@@ -145,7 +145,8 @@ fun CustomerStatementScreen(
     it.type == "صرف" || it.type == "فاتورة" || (it.type == "افتتاح" && it.amount > 0)
   }.sumOf {
     val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
-    ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, exchangeRates)
+    val ratesToUse = it.exchangeRates ?: exchangeRates
+    it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
   }
 
   val convertedTotalCredit = filteredTransactions.filter {
@@ -153,7 +154,8 @@ fun CustomerStatementScreen(
   }.sumOf {
     val amt = if (it.type == "افتتاح") Math.abs(it.amount) else it.amount
     val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
-    ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, exchangeRates)
+    val ratesToUse = it.exchangeRates ?: exchangeRates
+    it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
   }
 
   val rawNetBalance = convertedTotalDebit - convertedTotalCredit
@@ -162,7 +164,8 @@ fun CustomerStatementScreen(
   var runningBalCalc = 0.0
   val transactionRunningBalances = filteredTransactions.associateWith { t ->
     val curr = if (t.currency.isNotBlank()) t.currency else baseCurrency
-    val converted = ArabicNumberHelper.convertCurrency(t.amount, curr, baseCurrency, exchangeRates)
+    val ratesToUse = t.exchangeRates ?: exchangeRates
+    val converted = t.convertedAmount ?: ArabicNumberHelper.convertCurrency(t.amount, curr, baseCurrency, ratesToUse)
     when (t.type) {
       "قبض" -> runningBalCalc -= converted
       "صرف", "فاتورة" -> runningBalCalc += converted

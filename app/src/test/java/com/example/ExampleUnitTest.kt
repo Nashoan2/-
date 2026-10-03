@@ -116,4 +116,74 @@ class ExampleUnitTest {
     assertEquals(150.0, finalCustomer.transactions[0].balanceAfter, 0.001)
     assertEquals(100.0, finalCustomer.transactions[1].balanceAfter, 0.001)
   }
+
+  @Test
+  fun testHistoricalTransactionsUnaffectedByNewExchangeRates() {
+    val initialRates = com.example.data.ExchangeRates(
+      sarToYer = 140.0,
+      yerToSar = 1.0 / 140.0
+    )
+    val baseCurrency = "YER"
+
+    // 1. Transaction saved with initial rates (100 SAR = 14,000 YER)
+    val converted1 = com.example.util.ArabicNumberHelper.convertCurrency(100.0, "SAR", baseCurrency, initialRates)
+    assertEquals(14000.0, converted1, 0.001)
+
+    val tx1 = com.example.data.TransactionRecord(
+      date = "2026-10-01 10:00",
+      type = "قبض",
+      amount = 100.0,
+      currency = "SAR",
+      note = "سند قبض أولي",
+      voucherNum = "1",
+      balanceAfter = -14000.0,
+      exchangeRates = initialRates,
+      convertedAmount = converted1
+    )
+
+    // 2. Later, exchange rate changes to 1 SAR = 160 YER
+    val newRates = com.example.data.ExchangeRates(
+      sarToYer = 160.0,
+      yerToSar = 1.0 / 160.0
+    )
+
+    // Verify that tx1 still uses its locked convertedAmount / saved rates
+    val tx1EffectiveConverted = tx1.convertedAmount ?: com.example.util.ArabicNumberHelper.convertCurrency(
+      tx1.amount, tx1.currency, baseCurrency, tx1.exchangeRates ?: newRates
+    )
+    assertEquals(14000.0, tx1EffectiveConverted, 0.001)
+
+    // 3. New transaction recorded after rate change (100 SAR = 16,000 YER)
+    val converted2 = com.example.util.ArabicNumberHelper.convertCurrency(100.0, "SAR", baseCurrency, newRates)
+    assertEquals(16000.0, converted2, 0.001)
+
+    val tx2 = com.example.data.TransactionRecord(
+      date = "2026-10-03 10:00",
+      type = "قبض",
+      amount = 100.0,
+      currency = "SAR",
+      note = "سند قبض جديد بسعر الصرف الحالي",
+      voucherNum = "2",
+      balanceAfter = -30000.0,
+      exchangeRates = newRates,
+      convertedAmount = converted2
+    )
+
+    val tx2EffectiveConverted = tx2.convertedAmount ?: com.example.util.ArabicNumberHelper.convertCurrency(
+      tx2.amount, tx2.currency, baseCurrency, tx2.exchangeRates ?: newRates
+    )
+    assertEquals(16000.0, tx2EffectiveConverted, 0.001)
+
+    // Combined balance reflects 14,000 + 16,000 = 30,000 YER (not 32,000 YER)
+    val totalPaid = tx1EffectiveConverted + tx2EffectiveConverted
+    assertEquals(30000.0, totalPaid, 0.001)
+
+    // 4. Editing tx1 preserves its historical exchange rate
+    val editedAmount = 150.0
+    val editedConverted = com.example.util.ArabicNumberHelper.convertCurrency(
+      editedAmount, tx1.currency, baseCurrency, tx1.exchangeRates ?: newRates
+    )
+    // 150 * 140 = 21,000 YER (not 150 * 160 = 24,000)
+    assertEquals(21000.0, editedConverted, 0.001)
+  }
 }

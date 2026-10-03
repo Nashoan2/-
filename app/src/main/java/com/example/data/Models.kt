@@ -19,7 +19,9 @@ data class TransactionRecord(
   val currency: String = "YER",
   val note: String = "",
   val voucherNum: String? = null,
-  val balanceAfter: Double
+  val balanceAfter: Double,
+  val exchangeRates: ExchangeRates? = null,
+  val convertedAmount: Double? = null
 )
 
 data class Customer(
@@ -65,7 +67,8 @@ data class InvoiceData(
   val currency: String = "YER",
   val extraItems: List<ExtraItem> = emptyList(),
   val grandTotal: Double = 0.0,
-  val createdAt: String = ""
+  val createdAt: String = "",
+  val exchangeRates: ExchangeRates? = null
 )
 
 data class VoucherItem(
@@ -76,7 +79,9 @@ data class VoucherItem(
   val date: String,
   val amount: Double,
   val currency: String = "YER",
-  val note: String = ""
+  val note: String = "",
+  val exchangeRates: ExchangeRates? = null,
+  val convertedAmount: Double? = null
 )
 
 enum class ButtonSize(val label: String, val heightDp: Int, val fontSizeSp: Int) {

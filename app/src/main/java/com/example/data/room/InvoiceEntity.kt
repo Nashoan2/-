@@ -20,5 +20,6 @@ data class InvoiceEntity(
   val extraItemsJson: String = "[]",
   val grandTotal: Double = 0.0,
   val createdAt: String = "",
-  val savedAtTimestamp: Long = System.currentTimeMillis()
+  val savedAtTimestamp: Long = System.currentTimeMillis(),
+  val exchangeRatesJson: String? = null
 )

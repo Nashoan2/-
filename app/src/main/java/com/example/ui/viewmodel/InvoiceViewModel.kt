@@ -1147,10 +1147,16 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun getExtraItemsTotal(targetCurrency: String = _uiState.value.currency): Double {
+    val ratesToUse = if (_uiState.value.editingInvoiceId != null) {
+      val existingInv = repository.savedInvoices.find { it.id == _uiState.value.editingInvoiceId }
+      existingInv?.exchangeRates ?: repository.exchangeRates
+    } else {
+      repository.exchangeRates
+    }
     var sum = 0.0
     for (item in _uiState.value.extraItems) {
       val itemTotal = item.price * item.qty
-      sum += repository.convertCurrency(itemTotal, item.currency, targetCurrency)
+      sum += ArabicNumberHelper.convertCurrency(itemTotal, item.currency, targetCurrency, ratesToUse)
     }
     return sum
   }
@@ -1257,6 +1263,7 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
       val existingInv = repository.savedInvoices.find { it.id == state.editingInvoiceId }
       if (existingInv != null) {
         // Modifying existing invoice - preserve existing endDate strictly
+        val invRates = existingInv.exchangeRates ?: repository.exchangeRates
         val updatedInvoice = InvoiceData(
           id = existingInv.id,
           invNum = finalInvNum,
@@ -1272,7 +1279,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           currency = state.currency,
           extraItems = state.extraItems,
           grandTotal = grandTotal,
-          createdAt = dateToUse
+          createdAt = dateToUse,
+          exchangeRates = invRates
         )
         repository.updateSavedInvoice(updatedInvoice, oldInvoice = existingInv)
         showToast("✅ تم حفظ تعديلات الفاتورة رقم $finalInvNum وتاريخها ($dateToUse) بنجاح دون تكرار.")
@@ -1314,7 +1322,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
       currency = state.currency,
       extraItems = state.extraItems,
       grandTotal = grandTotal,
-      createdAt = dateToUse
+      createdAt = dateToUse,
+      exchangeRates = repository.exchangeRates
     )
 
     val updatedInvoices = repository.savedInvoices.toMutableList().apply { add(invoice) }
@@ -1328,7 +1337,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
         note = mainDesc,
         voucherNum = finalInvNum,
         currency = state.currency,
-        customDate = dateToUse
+        customDate = dateToUse,
+        exchangeRates = repository.exchangeRates
       )
       showToast("✅ تم حفظ الفاتورة وإضافة $grandTotal ${state.currency} لحساب العميل $acc")
     } else {
@@ -1684,7 +1694,9 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
           amount = initialBalance,
           currency = currency,
           note = "افتتاحي",
-          balanceAfter = initialBalance
+          balanceAfter = initialBalance,
+          exchangeRates = repository.exchangeRates,
+          convertedAmount = initialBalance
         )
       )
     } else emptyList()
@@ -1738,7 +1750,9 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
             amount = newInitialBalance,
             currency = newCurrency ?: "YER",
             note = "افتتاحي",
-            balanceAfter = newInitialBalance
+            balanceAfter = newInitialBalance,
+            exchangeRates = repository.exchangeRates,
+            convertedAmount = newInitialBalance
           )
           updatedTransactions.add(0, newTx)
         }
@@ -1815,7 +1829,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
       note = note.trim(),
       voucherNum = vNum,
       currency = currency,
-      customDate = if (date.isNotBlank()) date else null
+      customDate = if (date.isNotBlank()) date else null,
+      exchangeRates = repository.exchangeRates
     )
     if (updatedCustomer == null) {
       showToast("❌ العميل غير موجود.")
@@ -1878,7 +1893,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
       note = note.trim(),
       voucherNum = vNum,
       currency = currency,
-      customDate = if (date.isNotBlank()) date else null
+      customDate = if (date.isNotBlank()) date else null,
+      exchangeRates = repository.exchangeRates
     )
     if (updatedCustomer == null) {
       showToast("❌ العميل غير موجود.")

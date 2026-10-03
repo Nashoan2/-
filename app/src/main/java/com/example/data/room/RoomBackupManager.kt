@@ -69,7 +69,8 @@ class RoomBackupManager(private val context: Context) {
             currency = inv.currency,
             extraItemsJson = serializeExtraItems(inv.extraItems),
             grandTotal = inv.grandTotal,
-            createdAt = inv.createdAt
+            createdAt = inv.createdAt,
+            exchangeRatesJson = serializeRates(inv.exchangeRates)
           )
         }
         invoiceDao.deleteAllInvoices()
@@ -102,7 +103,9 @@ class RoomBackupManager(private val context: Context) {
                 currency = t.currency,
                 note = t.note,
                 voucherNum = t.voucherNum,
-                balanceAfter = t.balanceAfter
+                balanceAfter = t.balanceAfter,
+                convertedAmount = t.convertedAmount,
+                exchangeRatesJson = serializeRates(t.exchangeRates)
               )
             )
           }
@@ -135,7 +138,8 @@ class RoomBackupManager(private val context: Context) {
           currency = e.currency,
           extraItems = deserializeExtraItems(e.extraItemsJson),
           grandTotal = e.grandTotal,
-          createdAt = e.createdAt
+          createdAt = e.createdAt,
+          exchangeRates = deserializeRates(e.exchangeRatesJson)
         )
       }
     } catch (e: Exception) {
@@ -161,7 +165,9 @@ class RoomBackupManager(private val context: Context) {
             currency = t.currency,
             note = t.note,
             voucherNum = t.voucherNum,
-            balanceAfter = t.balanceAfter
+            balanceAfter = t.balanceAfter,
+            exchangeRates = deserializeRates(t.exchangeRatesJson),
+            convertedAmount = t.convertedAmount
           )
         }
         Customer(
@@ -435,6 +441,16 @@ class RoomBackupManager(private val context: Context) {
         put("currency", inv.currency)
         put("grandTotal", inv.grandTotal)
         put("createdAt", inv.createdAt)
+        if (inv.exchangeRates != null) {
+          put("exchangeRates", JSONObject().apply {
+            put("yerToUsd", inv.exchangeRates.yerToUsd)
+            put("usdToYer", inv.exchangeRates.usdToYer)
+            put("yerToSar", inv.exchangeRates.yerToSar)
+            put("sarToYer", inv.exchangeRates.sarToYer)
+            put("usdToSar", inv.exchangeRates.usdToSar)
+            put("sarToUsd", inv.exchangeRates.sarToUsd)
+          })
+        }
         val extraArray = JSONArray()
         for (ex in inv.extraItems) {
           extraArray.put(JSONObject().apply {
@@ -472,6 +488,17 @@ class RoomBackupManager(private val context: Context) {
             put("note", t.note)
             put("voucherNum", t.voucherNum)
             put("balanceAfter", t.balanceAfter)
+            if (t.convertedAmount != null) put("convertedAmount", t.convertedAmount)
+            if (t.exchangeRates != null) {
+              put("exchangeRates", JSONObject().apply {
+                put("yerToUsd", t.exchangeRates.yerToUsd)
+                put("usdToYer", t.exchangeRates.usdToYer)
+                put("yerToSar", t.exchangeRates.yerToSar)
+                put("sarToYer", t.exchangeRates.sarToYer)
+                put("usdToSar", t.exchangeRates.usdToSar)
+                put("sarToUsd", t.exchangeRates.sarToUsd)
+              })
+            }
           })
         }
         put("transactions", txArray)
@@ -548,6 +575,35 @@ class RoomBackupManager(private val context: Context) {
       list
     } catch (_: Exception) {
       emptyList()
+    }
+  }
+
+  private fun serializeRates(rates: ExchangeRates?): String? {
+    if (rates == null) return null
+    return JSONObject().apply {
+      put("yerToUsd", rates.yerToUsd)
+      put("usdToYer", rates.usdToYer)
+      put("yerToSar", rates.yerToSar)
+      put("sarToYer", rates.sarToYer)
+      put("usdToSar", rates.usdToSar)
+      put("sarToUsd", rates.sarToUsd)
+    }.toString()
+  }
+
+  private fun deserializeRates(jsonStr: String?): ExchangeRates? {
+    if (jsonStr.isNullOrBlank()) return null
+    return try {
+      val o = JSONObject(jsonStr)
+      ExchangeRates(
+        yerToUsd = o.optDouble("yerToUsd", 0.001876),
+        usdToYer = o.optDouble("usdToYer", 533.0),
+        yerToSar = o.optDouble("yerToSar", 0.007035),
+        sarToYer = o.optDouble("sarToYer", 142.1333),
+        usdToSar = o.optDouble("usdToSar", 3.75),
+        sarToUsd = o.optDouble("sarToUsd", 0.2667)
+      )
+    } catch (_: Exception) {
+      null
     }
   }
 }

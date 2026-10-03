@@ -605,6 +605,18 @@ class InvoiceRepository(context: Context) {
         if (txArray != null) {
           for (j in 0 until txArray.length()) {
             val tObj = txArray.getJSONObject(j)
+            val convAmt = if (tObj.has("convertedAmount") && !tObj.isNull("convertedAmount")) tObj.optDouble("convertedAmount") else null
+            val txRates = if (tObj.has("exchangeRates")) {
+              val r = tObj.getJSONObject("exchangeRates")
+              ExchangeRates(
+                yerToUsd = r.optDouble("yerToUsd", 0.001876),
+                usdToYer = r.optDouble("usdToYer", 533.0),
+                yerToSar = r.optDouble("yerToSar", 0.007035),
+                sarToYer = r.optDouble("sarToYer", 142.1333),
+                usdToSar = r.optDouble("usdToSar", 3.75),
+                sarToUsd = r.optDouble("sarToUsd", 0.2667)
+              )
+            } else null
             txList.add(
               TransactionRecord(
                 date = tObj.optString("date"),
@@ -613,7 +625,9 @@ class InvoiceRepository(context: Context) {
                 currency = tObj.optString("currency", "$"),
                 note = tObj.optString("note"),
                 voucherNum = if (tObj.has("voucherNum") && !tObj.isNull("voucherNum")) tObj.optString("voucherNum") else null,
-                balanceAfter = tObj.optDouble("balanceAfter")
+                balanceAfter = tObj.optDouble("balanceAfter"),
+                exchangeRates = txRates,
+                convertedAmount = convAmt
               )
             )
           }
@@ -672,6 +686,17 @@ class InvoiceRepository(context: Context) {
             put("note", t.note)
             put("voucherNum", t.voucherNum)
             put("balanceAfter", t.balanceAfter)
+            if (t.convertedAmount != null) put("convertedAmount", t.convertedAmount)
+            if (t.exchangeRates != null) {
+              put("exchangeRates", JSONObject().apply {
+                put("yerToUsd", t.exchangeRates.yerToUsd)
+                put("usdToYer", t.exchangeRates.usdToYer)
+                put("yerToSar", t.exchangeRates.yerToSar)
+                put("sarToYer", t.exchangeRates.sarToYer)
+                put("usdToSar", t.exchangeRates.usdToSar)
+                put("sarToUsd", t.exchangeRates.sarToUsd)
+              })
+            }
           })
         }
         put("transactions", txArray)
@@ -714,14 +739,14 @@ class InvoiceRepository(context: Context) {
       return customer
     }
 
-    val rates = try { exchangeRates } catch (_: Throwable) { null } ?: loadExchangeRates()
-    // Determine the base currency of this customer account (first non-empty transaction currency or USD)
+    val currentGlobalRates = try { exchangeRates } catch (_: Throwable) { null } ?: loadExchangeRates()
     val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "$"
 
     var currentBalanceInBase = 0.0
     val updatedTransactions = customer.transactions.map { t ->
       val tCurrency = if (t.currency.isNotBlank()) t.currency else baseCurrency
-      val convertedAmount = ArabicNumberHelper.convertCurrency(t.amount, tCurrency, baseCurrency, rates)
+      val rateToUse = t.exchangeRates ?: currentGlobalRates
+      val convertedAmount = t.convertedAmount ?: ArabicNumberHelper.convertCurrency(t.amount, tCurrency, baseCurrency, rateToUse)
 
       when (t.type) {
         "قبض" -> currentBalanceInBase -= convertedAmount
@@ -731,7 +756,11 @@ class InvoiceRepository(context: Context) {
       }
 
       val cleanBalance = if (Math.abs(currentBalanceInBase) < 0.005) 0.0 else Math.round(currentBalanceInBase * 100.0) / 100.0
-      t.copy(balanceAfter = cleanBalance)
+      t.copy(
+        balanceAfter = cleanBalance,
+        exchangeRates = rateToUse,
+        convertedAmount = convertedAmount
+      )
     }
 
     val finalBalance = if (Math.abs(currentBalanceInBase) < 0.005) 0.0 else Math.round(currentBalanceInBase * 100.0) / 100.0
@@ -751,7 +780,8 @@ class InvoiceRepository(context: Context) {
     note: String,
     voucherNum: String? = null,
     currency: String = "$",
-    customDate: String? = null
+    customDate: String? = null,
+    exchangeRates: ExchangeRates? = null
   ): Customer? {
     val customerIndex = customers.indexOfFirst {
       ArabicNumberHelper.toEngDigits(it.accountNumber).trim() == ArabicNumberHelper.toEngDigits(account).trim()
@@ -762,6 +792,9 @@ class InvoiceRepository(context: Context) {
     val dateToUse = if (!customDate.isNullOrBlank()) customDate else ArabicNumberHelper.formatDateTime()
 
     val fullNote = note.trim()
+    val ratesToUse = exchangeRates ?: this.exchangeRates
+    val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: currency
+    val convAmount = ArabicNumberHelper.convertCurrency(amount, currency, baseCurrency, ratesToUse)
 
     val updatedTx = customer.transactions.toMutableList().apply {
       add(
@@ -772,7 +805,9 @@ class InvoiceRepository(context: Context) {
           currency = currency,
           note = fullNote,
           voucherNum = voucherNum,
-          balanceAfter = 0.0
+          balanceAfter = 0.0,
+          exchangeRates = ratesToUse,
+          convertedAmount = convAmount
         )
       )
     }
@@ -797,7 +832,9 @@ class InvoiceRepository(context: Context) {
               date = t.date,
               amount = t.amount,
               currency = t.currency,
-              note = t.note
+              note = t.note,
+              exchangeRates = t.exchangeRates,
+              convertedAmount = t.convertedAmount
             )
           )
         }
@@ -915,13 +952,19 @@ class InvoiceRepository(context: Context) {
     val finalVoucherNum = ArabicNumberHelper.toEngDigits(newVoucherNum).trim().ifEmpty { cleanOldVNum }
 
     val formattedNote = newNote.trim()
+    val voucherRates = origTx.exchangeRates ?: exchangeRates
+    val targetBaseCurr = (if (cleanTargetAcc == cleanOrigAcc) origCustomer else (customers.find { ArabicNumberHelper.toEngDigits(it.accountNumber).trim() == cleanTargetAcc } ?: origCustomer))
+      .transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: newCurrency
+    val updatedConvertedAmount = ArabicNumberHelper.convertCurrency(newAmount, newCurrency, targetBaseCurr, voucherRates)
 
     val updatedRecord = origTx.copy(
       voucherNum = finalVoucherNum,
       amount = newAmount,
       currency = newCurrency,
       note = formattedNote,
-      date = if (newDate.isNotBlank()) newDate else origTx.date
+      date = if (newDate.isNotBlank()) newDate else origTx.date,
+      exchangeRates = voucherRates,
+      convertedAmount = updatedConvertedAmount
     )
 
     // Advance sequence if higher voucher number entered
@@ -1041,14 +1084,18 @@ class InvoiceRepository(context: Context) {
       "فاتورة رقم (${updatedInvoice.invNum})"
     }
 
+    val invRates = updatedInvoice.exchangeRates ?: existingOldInv?.exchangeRates ?: exchangeRates
+    val finalInvoiceToSave = updatedInvoice.copy(exchangeRates = invRates)
+
     val updatedTxRecord = TransactionRecord(
-      date = if (updatedInvoice.createdAt.isNotBlank()) updatedInvoice.createdAt else ArabicNumberHelper.formatDateTime(),
+      date = if (finalInvoiceToSave.createdAt.isNotBlank()) finalInvoiceToSave.createdAt else ArabicNumberHelper.formatDateTime(),
       type = "فاتورة",
-      amount = updatedInvoice.grandTotal,
-      currency = updatedInvoice.currency,
+      amount = finalInvoiceToSave.grandTotal,
+      currency = finalInvoiceToSave.currency,
       note = newInvNote,
-      voucherNum = updatedInvoice.invNum,
-      balanceAfter = 0.0
+      voucherNum = finalInvoiceToSave.invNum,
+      balanceAfter = 0.0,
+      exchangeRates = invRates
     )
 
     fun isMatchingInvoiceTx(t: TransactionRecord): Boolean {
@@ -1180,8 +1227,8 @@ class InvoiceRepository(context: Context) {
       put("sarToUsd", rates.sarToUsd)
     }
     prefs.edit().putString("exchangeRatesData", obj.toString()).apply()
-    val recalculated = customers.map { recalculateCustomerBalance(it) }.toMutableList()
-    saveCustomers(recalculated)
+    // Note: Historical transactions and invoices are locked to their recorded exchange rates
+    // and will NOT be modified by the new exchange rate.
   }
 
   fun convertCurrency(amount: Double, fromCurrency: String, toCurrency: String): Double {
@@ -1216,6 +1263,18 @@ class InvoiceRepository(context: Context) {
             )
           }
         }
+        val invRates = if (obj.has("exchangeRates")) {
+          val r = obj.getJSONObject("exchangeRates")
+          ExchangeRates(
+            yerToUsd = r.optDouble("yerToUsd", 0.001876),
+            usdToYer = r.optDouble("usdToYer", 533.0),
+            yerToSar = r.optDouble("yerToSar", 0.007035),
+            sarToYer = r.optDouble("sarToYer", 142.1333),
+            usdToSar = r.optDouble("usdToSar", 3.75),
+            sarToUsd = r.optDouble("sarToUsd", 0.2667)
+          )
+        } else null
+
         list.add(
           InvoiceData(
             id = obj.optLong("id", System.currentTimeMillis()),
@@ -1232,7 +1291,8 @@ class InvoiceRepository(context: Context) {
             currency = obj.optString("currency", "$"),
             extraItems = extras,
             grandTotal = obj.optDouble("grandTotal", 0.0),
-            createdAt = obj.optString("createdAt")
+            createdAt = obj.optString("createdAt"),
+            exchangeRates = invRates
           )
         )
       }
@@ -1263,6 +1323,16 @@ class InvoiceRepository(context: Context) {
         put("currency", inv.currency)
         put("grandTotal", inv.grandTotal)
         put("createdAt", inv.createdAt)
+        if (inv.exchangeRates != null) {
+          put("exchangeRates", JSONObject().apply {
+            put("yerToUsd", inv.exchangeRates.yerToUsd)
+            put("usdToYer", inv.exchangeRates.usdToYer)
+            put("yerToSar", inv.exchangeRates.yerToSar)
+            put("sarToYer", inv.exchangeRates.sarToYer)
+            put("usdToSar", inv.exchangeRates.usdToSar)
+            put("sarToUsd", inv.exchangeRates.sarToUsd)
+          })
+        }
         val exArray = JSONArray()
         for (e in inv.extraItems) {
           exArray.put(JSONObject().apply {
@@ -1476,6 +1546,17 @@ class InvoiceRepository(context: Context) {
       val currency = o.optString("currency", "$")
       val grandTotal = parseSafeDouble(o, "grandTotal", price * qty)
       val createdAt = o.optString("createdAt", "")
+      val invRates = if (o.has("exchangeRates")) {
+        val r = o.getJSONObject("exchangeRates")
+        ExchangeRates(
+          yerToUsd = parseSafeDouble(r, "yerToUsd", 0.001876),
+          usdToYer = parseSafeDouble(r, "usdToYer", 533.0),
+          yerToSar = parseSafeDouble(r, "yerToSar", 0.007035),
+          sarToYer = parseSafeDouble(r, "sarToYer", 142.1333),
+          usdToSar = parseSafeDouble(r, "usdToSar", 3.75),
+          sarToUsd = parseSafeDouble(r, "sarToUsd", 0.2667)
+        )
+      } else null
 
       invList.add(
         InvoiceData(
@@ -1493,7 +1574,8 @@ class InvoiceRepository(context: Context) {
           currency = currency,
           extraItems = exList,
           grandTotal = grandTotal,
-          createdAt = createdAt
+          createdAt = createdAt,
+          exchangeRates = invRates
         )
       )
     }
@@ -1511,6 +1593,18 @@ class InvoiceRepository(context: Context) {
           val to = txArray.optJSONObject(j) ?: continue
           val rawVoucher = to.opt("voucherNum")?.toString()?.trim()
           val voucherNum = if (rawVoucher != null && rawVoucher != "null" && rawVoucher.isNotBlank()) rawVoucher else null
+          val convAmt = if (to.has("convertedAmount")) parseSafeDouble(to, "convertedAmount", 0.0) else null
+          val txRates = if (to.has("exchangeRates")) {
+            val r = to.getJSONObject("exchangeRates")
+            ExchangeRates(
+              yerToUsd = parseSafeDouble(r, "yerToUsd", 0.001876),
+              usdToYer = parseSafeDouble(r, "usdToYer", 533.0),
+              yerToSar = parseSafeDouble(r, "yerToSar", 0.007035),
+              sarToYer = parseSafeDouble(r, "sarToYer", 142.1333),
+              usdToSar = parseSafeDouble(r, "usdToSar", 3.75),
+              sarToUsd = parseSafeDouble(r, "sarToUsd", 0.2667)
+            )
+          } else null
           txList.add(
             TransactionRecord(
               date = to.optString("date", ""),
@@ -1519,7 +1613,9 @@ class InvoiceRepository(context: Context) {
               currency = to.optString("currency", "$"),
               note = to.optString("note", ""),
               voucherNum = voucherNum,
-              balanceAfter = parseSafeDouble(to, "balanceAfter", 0.0)
+              balanceAfter = parseSafeDouble(to, "balanceAfter", 0.0),
+              exchangeRates = txRates,
+              convertedAmount = convAmt
             )
           )
         }

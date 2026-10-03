@@ -13,5 +13,7 @@ data class TransactionEntity(
   val currency: String = "$",
   val note: String = "",
   val voucherNum: String? = null,
-  val balanceAfter: Double
+  val balanceAfter: Double,
+  val convertedAmount: Double? = null,
+  val exchangeRatesJson: String? = null
 )
