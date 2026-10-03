@@ -186,4 +186,50 @@ class ExampleUnitTest {
     // 150 * 140 = 21,000 YER (not 150 * 160 = 24,000)
     assertEquals(21000.0, editedConverted, 0.001)
   }
+
+  @Test
+  fun testCustomerStatementSeptemberToOctober() {
+    val dateFormats = listOf(
+      "15/09/2026",
+      "15/9/2026",
+      "15/09/2026 14:30",
+      "15/9/2026 2:30 م",
+      "15/09/2026 02:30 م",
+      "15/09/2026 02:30 ص",
+      "15-09-2026",
+      "15-9-2026",
+      "2026-09-15",
+      "2026/09/15",
+      "2026/9/15"
+    )
+    for (dStr in dateFormats) {
+      val parsed = com.example.util.ArabicNumberHelper.parseDate(dStr)
+      assertNotNull("Failed to parse date: $dStr", parsed)
+    }
+
+    val startDateStr = "01/10/2026"
+    val endDateStr = "03/10/2026"
+    val sDate = com.example.util.ArabicNumberHelper.parseDate(startDateStr)
+    val eDate = com.example.util.ArabicNumberHelper.parseDate(endDateStr)
+    assertNotNull(sDate)
+    assertNotNull(eDate)
+
+    val startCal = java.util.Calendar.getInstance().apply {
+      time = sDate!!
+      set(java.util.Calendar.HOUR_OF_DAY, 0)
+      set(java.util.Calendar.MINUTE, 0)
+      set(java.util.Calendar.SECOND, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val endCal = java.util.Calendar.getInstance().apply {
+      time = eDate!!
+      set(java.util.Calendar.HOUR_OF_DAY, 23)
+      set(java.util.Calendar.MINUTE, 59)
+      set(java.util.Calendar.SECOND, 59)
+      set(java.util.Calendar.MILLISECOND, 999)
+    }
+
+    val septDate = com.example.util.ArabicNumberHelper.parseDate("15/09/2026 10:00")!!
+    assertTrue("Sept date must be before startCal", septDate.before(startCal.time))
+  }
 }

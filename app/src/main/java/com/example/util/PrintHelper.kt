@@ -615,40 +615,97 @@ object PrintHelper {
 
     val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
       ?: filteredTransactions.firstOrNull { it.currency.isNotBlank() }?.currency
-      ?: "USD"
+      ?: "YER"
+
+    val priorTransactions = customer.transactions.filter { t ->
+      if (startCal == null) return@filter false
+      val tDate = ArabicNumberHelper.parseDate(t.date)
+      tDate != null && tDate.before(startCal.time)
+    }
+
+    val priorDebit = priorTransactions.filter {
+      it.type == "صرف" || it.type == "فاتورة" || it.type.contains("صرف") || it.type.contains("فاتورة") || (it.type.contains("افتتاح") && it.amount > 0)
+    }.sumOf {
+      val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
+      val ratesToUse = it.exchangeRates ?: exchangeRates
+      val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+      Math.abs(rawAmt)
+    }
+
+    val priorCredit = priorTransactions.filter {
+      it.type == "قبض" || it.type.contains("قبض") || (it.type.contains("افتتاح") && it.amount < 0)
+    }.sumOf {
+      val amt = if (it.type.contains("افتتاح")) Math.abs(it.amount) else it.amount
+      val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
+      val ratesToUse = it.exchangeRates ?: exchangeRates
+      val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+      Math.abs(rawAmt)
+    }
 
     val debitTransactions = filteredTransactions.filter {
-      it.type == "صرف" || it.type == "فاتورة" || (it.type == "افتتاح" && it.amount > 0)
+      it.type == "صرف" || it.type == "فاتورة" || it.type.contains("صرف") || it.type.contains("فاتورة") || (it.type.contains("افتتاح") && it.amount > 0)
     }
     val creditTransactions = filteredTransactions.filter {
-      it.type == "قبض" || (it.type == "افتتاح" && it.amount < 0)
+      it.type == "قبض" || it.type.contains("قبض") || (it.type.contains("افتتاح") && it.amount < 0)
     }
 
     val convertedTotalDebit = debitTransactions.sumOf {
       val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
       val ratesToUse = it.exchangeRates ?: exchangeRates
-      it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+      val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+      Math.abs(rawAmt)
     }
 
     val convertedTotalCredit = creditTransactions.sumOf {
-      val amt = if (it.type == "افتتاح") Math.abs(it.amount) else it.amount
+      val amt = if (it.type.contains("افتتاح")) Math.abs(it.amount) else it.amount
       val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
       val ratesToUse = it.exchangeRates ?: exchangeRates
-      it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+      val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+      Math.abs(rawAmt)
     }
 
-    val rawNet = convertedTotalDebit - convertedTotalCredit
+    val computedPriorBal = priorDebit - priorCredit
+    val previousBalance = if (startCal == null) {
+      0.0
+    } else if (priorTransactions.isNotEmpty()) {
+      if (Math.abs(computedPriorBal) >= 0.005) {
+        computedPriorBal
+      } else {
+        val lastPrior = priorTransactions.lastOrNull()
+        if (lastPrior != null && Math.abs(lastPrior.balanceAfter) >= 0.005) {
+          lastPrior.balanceAfter
+        } else if (filteredTransactions.isEmpty() && Math.abs(customer.balance) >= 0.005) {
+          customer.balance
+        } else {
+          computedPriorBal
+        }
+      }
+    } else {
+      if (filteredTransactions.isEmpty() && Math.abs(customer.balance) >= 0.005) {
+        customer.balance
+      } else if (filteredTransactions.isNotEmpty()) {
+        val expected = customer.balance - (convertedTotalDebit - convertedTotalCredit)
+        if (Math.abs(expected) >= 0.005) expected else 0.0
+      } else {
+        0.0
+      }
+    }
+
+    val hasPriorBalance = Math.abs(previousBalance) >= 0.005
+
+    val rawNet = previousBalance + convertedTotalDebit - convertedTotalCredit
     val finalBalance = if (Math.abs(rawNet) < 0.005) 0.0 else rawNet
 
-    var runningBalCalc = 0.0
+    var runningBalCalc = previousBalance
     val transactionRunningBalances = filteredTransactions.associateWith { t ->
       val curr = if (t.currency.isNotBlank()) t.currency else baseCurrency
       val ratesToUse = t.exchangeRates ?: exchangeRates
       val converted = t.convertedAmount ?: ArabicNumberHelper.convertCurrency(t.amount, curr, baseCurrency, ratesToUse)
-      when (t.type) {
-        "قبض" -> runningBalCalc -= converted
-        "صرف", "فاتورة" -> runningBalCalc += converted
-        "افتتاح" -> if (t.amount < 0) runningBalCalc -= Math.abs(converted) else runningBalCalc += converted
+      val absConv = Math.abs(converted)
+      when {
+        t.type == "قبض" || t.type.contains("قبض") -> runningBalCalc -= absConv
+        t.type == "صرف" || t.type == "فاتورة" || t.type.contains("صرف") || t.type.contains("فاتورة") -> runningBalCalc += absConv
+        t.type == "افتتاح" || t.type.contains("افتتاح") -> if (t.amount < 0) runningBalCalc -= absConv else runningBalCalc += absConv
         else -> runningBalCalc += converted
       }
       if (Math.abs(runningBalCalc) < 0.005) 0.0 else runningBalCalc
@@ -714,8 +771,28 @@ object PrintHelper {
     val accountHtml = """<div class="inv-account-box">رقم الحساب / <span style="color:${reportConfig.customerAccountColorHex};font-weight:900;">${customer.accountNumber}</span></div>"""
 
     var rows = ""
+    if (hasPriorBalance) {
+      val priorAlaykum = if (previousBalance > 0) "$finalSymBlue ${ArabicNumberHelper.formatAmount(previousBalance)}" else "-"
+      val priorLakum = if (previousBalance < 0) "$finalSymBlue ${ArabicNumberHelper.formatAmount(Math.abs(previousBalance))}" else "-"
+      val priorBalStr = "$finalSymBlue ${ArabicNumberHelper.formatAmount(previousBalance)}"
+      rows += """
+        <tr style="background:#FFF9C4;font-weight:900;">
+          <td style="font-size:${13 * scale}px;font-weight:700;" dir="ltr">${startDateStr.ifBlank { "ما قبله" }}</td>
+          <td style="font-size:${13 * scale}px;font-weight:900;color:#B78103;white-space:nowrap;">رصيد سابق</td>
+          <td style="font-size:${13 * scale}px;font-weight:700;color:#000;text-align:center;">رصيد مرحل ما قبل تاريخ ${startDateStr.ifBlank { "الفترة" }}</td>
+          <td style="font-size:${14 * scale}px;font-weight:800;color:#C62828;" dir="ltr">$priorAlaykum</td>
+          <td style="font-size:${14 * scale}px;font-weight:800;color:#1E824C;" dir="ltr">$priorLakum</td>
+          <td style="font-size:${14 * scale}px;font-weight:900;color:#5E258D;" dir="ltr">$priorBalStr</td>
+        </tr>
+      """.trimIndent()
+    }
+
     if (filteredTransactions.isEmpty()) {
-      rows = "<tr><td colspan=\"6\" style=\"padding:18px;font-weight:800;color:#888;font-size:${15 * scale}px;\">لا توجد حركات في الفترة المحددة</td></tr>"
+      if (hasPriorBalance) {
+        rows += "<tr><td colspan=\"6\" style=\"padding:14px;font-weight:800;color:#555;font-size:${13.5 * scale}px;background:#F9FAFB;\">لا توجد حركات جديدة مسجلة خلال الفترة المحددة — والرصيد المستحق أعلاه مرحل من فترات سابقة</td></tr>"
+      } else {
+        rows += "<tr><td colspan=\"6\" style=\"padding:18px;font-weight:800;color:#888;font-size:${15 * scale}px;\">لا توجد حركات في الفترة المحددة</td></tr>"
+      }
     } else {
       filteredTransactions.forEach { t ->
         val tSym = ArabicNumberHelper.getCurrencySymbol(t.currency.ifEmpty { defaultCurrency })
@@ -901,6 +978,12 @@ object PrintHelper {
             $rows
           </tbody>
         </table>
+        ${if (hasPriorBalance) """
+          <div style="background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:${13 * scale}px;font-weight:bold;color:#92400E;">📌 يتضمن الكشف رصيداً سابقاً مرحلاً ما قبل تاريخ ${startDateStr.ifBlank { "الفترة" }}:</span>
+            <span style="font-size:${14 * scale}px;font-weight:900;color:${if (previousBalance > 0) "#C62828" else "#2E7D32"};" dir="ltr">$finalSymBlue ${ArabicNumberHelper.formatAmount(Math.abs(previousBalance))} ${if (previousBalance > 0) "(عليكم)" else "(لكم)"}</span>
+          </div>
+        """.trimIndent() else ""}
         <div class="footer-summary-container">
           <div style="flex:1;border:2px solid #EF5350;background:#fff;padding:12px 10px;border-radius:10px;text-align:center;">
             <div style="font-size:${14.5 * scale}px;font-weight:900;color:#C62828;">إجمالي عليكم</div>

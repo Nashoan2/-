@@ -11,5 +11,6 @@ data class CustomerEntity(
   val phone: String = "",
   val address: String = "",
   val balance: Double = 0.0,
+  val currency: String = "YER",
   val updatedAt: Long = System.currentTimeMillis()
 )

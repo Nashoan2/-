@@ -139,37 +139,95 @@ fun CustomerStatementScreen(
   // Base currency for multi-currency statement reconciliation
   val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
     ?: filteredTransactions.firstOrNull { it.currency.isNotBlank() }?.currency
-    ?: "USD"
+    ?: "YER"
 
-  val convertedTotalDebit = filteredTransactions.filter {
-    it.type == "صرف" || it.type == "فاتورة" || (it.type == "افتتاح" && it.amount > 0)
+  val priorTransactions = customer.transactions.filter { t ->
+    if (startCal == null) return@filter false
+    val tDate = ArabicNumberHelper.parseDate(t.date)
+    tDate != null && tDate.before(startCal.time)
+  }
+
+  val priorDebit = priorTransactions.filter {
+    it.type == "صرف" || it.type == "فاتورة" || it.type.contains("صرف") || it.type.contains("فاتورة") || (it.type.contains("افتتاح") && it.amount > 0)
   }.sumOf {
     val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
     val ratesToUse = it.exchangeRates ?: exchangeRates
-    it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+    val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+    Math.abs(rawAmt)
+  }
+
+  val priorCredit = priorTransactions.filter {
+    it.type == "قبض" || it.type.contains("قبض") || (it.type.contains("افتتاح") && it.amount < 0)
+  }.sumOf {
+    val amt = if (it.type.contains("افتتاح")) Math.abs(it.amount) else it.amount
+    val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
+    val ratesToUse = it.exchangeRates ?: exchangeRates
+    val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+    Math.abs(rawAmt)
+  }
+
+  val convertedTotalDebit = filteredTransactions.filter {
+    it.type == "صرف" || it.type == "فاتورة" || it.type.contains("صرف") || it.type.contains("فاتورة") || (it.type.contains("افتتاح") && it.amount > 0)
+  }.sumOf {
+    val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
+    val ratesToUse = it.exchangeRates ?: exchangeRates
+    val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(it.amount, curr, baseCurrency, ratesToUse)
+    Math.abs(rawAmt)
   }
 
   val convertedTotalCredit = filteredTransactions.filter {
-    it.type == "قبض" || (it.type == "افتتاح" && it.amount < 0)
+    it.type == "قبض" || it.type.contains("قبض") || (it.type.contains("افتتاح") && it.amount < 0)
   }.sumOf {
-    val amt = if (it.type == "افتتاح") Math.abs(it.amount) else it.amount
+    val amt = if (it.type.contains("افتتاح")) Math.abs(it.amount) else it.amount
     val curr = if (it.currency.isNotBlank()) it.currency else baseCurrency
     val ratesToUse = it.exchangeRates ?: exchangeRates
-    it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+    val rawAmt = it.convertedAmount ?: ArabicNumberHelper.convertCurrency(amt, curr, baseCurrency, ratesToUse)
+    Math.abs(rawAmt)
   }
 
-  val rawNetBalance = convertedTotalDebit - convertedTotalCredit
+  val computedPriorBal = priorDebit - priorCredit
+  val previousBalance = if (startCal == null) {
+    0.0
+  } else if (priorTransactions.isNotEmpty()) {
+    if (Math.abs(computedPriorBal) >= 0.005) {
+      computedPriorBal
+    } else {
+      val lastPrior = priorTransactions.lastOrNull()
+      if (lastPrior != null && Math.abs(lastPrior.balanceAfter) >= 0.005) {
+        lastPrior.balanceAfter
+      } else if (filteredTransactions.isEmpty() && Math.abs(customer.balance) >= 0.005) {
+        customer.balance
+      } else {
+        computedPriorBal
+      }
+    }
+  } else {
+    // If startCal is specified but priorTransactions list is empty (e.g. all transactions were in previous month and filteredTransactions is empty, or initial balance was not a transaction)
+    if (filteredTransactions.isEmpty() && Math.abs(customer.balance) >= 0.005) {
+      customer.balance
+    } else if (filteredTransactions.isNotEmpty()) {
+      val expected = customer.balance - (convertedTotalDebit - convertedTotalCredit)
+      if (Math.abs(expected) >= 0.005) expected else 0.0
+    } else {
+      0.0
+    }
+  }
+
+  val hasPriorBalance = Math.abs(previousBalance) >= 0.005
+
+  val rawNetBalance = previousBalance + convertedTotalDebit - convertedTotalCredit
   val finalBalance = if (Math.abs(rawNetBalance) < 0.005) 0.0 else rawNetBalance
 
-  var runningBalCalc = 0.0
+  var runningBalCalc = previousBalance
   val transactionRunningBalances = filteredTransactions.associateWith { t ->
     val curr = if (t.currency.isNotBlank()) t.currency else baseCurrency
     val ratesToUse = t.exchangeRates ?: exchangeRates
     val converted = t.convertedAmount ?: ArabicNumberHelper.convertCurrency(t.amount, curr, baseCurrency, ratesToUse)
-    when (t.type) {
-      "قبض" -> runningBalCalc -= converted
-      "صرف", "فاتورة" -> runningBalCalc += converted
-      "افتتاح" -> if (t.amount < 0) runningBalCalc -= Math.abs(converted) else runningBalCalc += converted
+    val absConv = Math.abs(converted)
+    when {
+      t.type == "قبض" || t.type.contains("قبض") -> runningBalCalc -= absConv
+      t.type == "صرف" || t.type == "فاتورة" || t.type.contains("صرف") || t.type.contains("فاتورة") -> runningBalCalc += absConv
+      t.type == "افتتاح" || t.type.contains("افتتاح") -> if (t.amount < 0) runningBalCalc -= absConv else runningBalCalc += absConv
       else -> runningBalCalc += converted
     }
     if (Math.abs(runningBalCalc) < 0.005) 0.0 else runningBalCalc
@@ -841,19 +899,137 @@ fun CustomerStatementScreen(
                   StatementHeaderCell(text = "الرصيد", weight = 1.55f, textColor = primaryBlue, fontSize = 10.5.sp)
                 }
 
+                if (hasPriorBalance) {
+                  // Previous balance row brought forward
+                  StatementBorderH(primaryBlue)
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .background(Color(0xFFFFF9C4))
+                      .height(IntrinsicSize.Min),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    // 1. Date
+                    StatementBodyCell(
+                      text = startDateStr.ifBlank { "ما قبله" },
+                      weight = 1.7f,
+                      isBold = true,
+                      textColor = Color.Black,
+                      fontSize = 9.sp,
+                      singleLine = true
+                    )
+                    StatementBorderV(primaryBlue)
+
+                    // 2. Type
+                    StatementBodyCell(
+                      text = "رصيد سابق",
+                      weight = 0.9f,
+                      isBold = true,
+                      textColor = Color(0xFFB78103),
+                      fontSize = 9.sp,
+                      singleLine = true
+                    )
+                    StatementBorderV(primaryBlue)
+
+                    // 3. Description
+                    StatementBodyCell(
+                      text = "رصيد مرحل ما قبل تاريخ ${startDateStr.ifBlank { "الفترة" }}",
+                      weight = 2.4f,
+                      textColor = Color.Black,
+                      isBold = true,
+                      fontSize = 8.5.sp,
+                      alignStart = false
+                    )
+                    StatementBorderV(primaryBlue)
+
+                    // 4. Lakum (Credit)
+                    val priorLakumAnnotated = if (previousBalance < 0) {
+                      buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color(0xFF0070BA), fontWeight = FontWeight.Black)) {
+                          append(ArabicNumberHelper.getCurrencySymbol(baseCurrency))
+                        }
+                        withStyle(SpanStyle(color = creditGreen, fontWeight = FontWeight.Black)) {
+                          append(ArabicNumberHelper.formatAmount(Math.abs(previousBalance)))
+                        }
+                      }
+                    } else null
+
+                    StatementBodyCell(
+                      text = if (priorLakumAnnotated == null) "-" else "",
+                      annotatedText = priorLakumAnnotated,
+                      weight = 1.45f,
+                      textColor = creditGreen,
+                      isBold = true,
+                      fontSize = 9.5.sp,
+                      isLtr = true,
+                      singleLine = true
+                    )
+                    StatementBorderV(primaryBlue)
+
+                    // 5. Alaykum (Debit)
+                    val priorAlaykumAnnotated = if (previousBalance > 0) {
+                      buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color(0xFF0070BA), fontWeight = FontWeight.Black)) {
+                          append(ArabicNumberHelper.getCurrencySymbol(baseCurrency))
+                        }
+                        withStyle(SpanStyle(color = debitRed, fontWeight = FontWeight.Black)) {
+                          append(ArabicNumberHelper.formatAmount(previousBalance))
+                        }
+                      }
+                    } else null
+
+                    StatementBodyCell(
+                      text = if (priorAlaykumAnnotated == null) "-" else "",
+                      annotatedText = priorAlaykumAnnotated,
+                      weight = 1.45f,
+                      textColor = debitRed,
+                      isBold = true,
+                      fontSize = 9.5.sp,
+                      isLtr = true,
+                      singleLine = true
+                    )
+                    StatementBorderV(primaryBlue)
+
+                    // 6. Balance After
+                    val priorBalAnnotated = buildAnnotatedString {
+                      withStyle(SpanStyle(color = Color(0xFF0070BA), fontWeight = FontWeight.Black)) {
+                        append(ArabicNumberHelper.getCurrencySymbol(baseCurrency))
+                      }
+                      withStyle(SpanStyle(color = purpleBrand, fontWeight = FontWeight.Black)) {
+                        append(ArabicNumberHelper.formatAmount(previousBalance))
+                      }
+                    }
+                    StatementBodyCell(
+                      text = "",
+                      annotatedText = priorBalAnnotated,
+                      weight = 1.55f,
+                      textColor = purpleBrand,
+                      isBold = true,
+                      fontSize = 9.5.sp,
+                      isLtr = true,
+                      singleLine = true
+                    )
+                  }
+                }
+
                 if (filteredTransactions.isEmpty()) {
                   StatementBorderH(primaryBlue)
                   Box(
                     modifier = Modifier
                       .fillMaxWidth()
-                      .padding(24.dp),
+                      .padding(vertical = 16.dp, horizontal = 12.dp),
                     contentAlignment = Alignment.Center
                   ) {
                     Text(
-                      text = "لا توجد حركات في الفترة المحددة",
+                      text = if (hasPriorBalance) {
+                        "لا توجد حركات جديدة مسجلة خلال الفترة المحددة — والرصيد المستحق أعلاه مرحل من فترات سابقة"
+                      } else {
+                        "لا توجد حركات في الفترة المحددة والحساب متزن (0.00)"
+                      },
                       fontWeight = FontWeight.Bold,
-                      color = Color.Gray,
-                      fontSize = 13.sp
+                      color = if (hasPriorBalance) Color(0xFF1E293B) else Color.Gray,
+                      fontSize = 12.5.sp,
+                      textAlign = TextAlign.Center
                     )
                   }
                 } else {
@@ -1039,6 +1215,39 @@ fun CustomerStatementScreen(
             tableContent()
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            if (hasPriorBalance) {
+              Surface(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(bottom = 8.dp),
+                color = Color(0xFFFEF3C7),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B))
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = "📌 يتضمن الكشف رصيداً سابقاً مرحلاً ما قبل تاريخ ${startDateStr.ifBlank { "الفترة" }}:",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF92400E)
+                  )
+                  val baseSym = ArabicNumberHelper.getCurrencySymbol(baseCurrency)
+                  Text(
+                    text = "$baseSym ${ArabicNumberHelper.formatAmount(Math.abs(previousBalance))} ${if (previousBalance > 0) "(عليكم)" else "(لكم)"}",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (previousBalance > 0) debitRed else creditGreen
+                  )
+                }
+              }
+            }
 
             // SUMMARY 3 CARDS IN A ROW
             Row(

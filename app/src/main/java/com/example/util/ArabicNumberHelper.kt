@@ -68,6 +68,7 @@ object ArabicNumberHelper {
   }
 
   fun parseDate(dateStr: String): Date? {
+    if (dateStr.isBlank()) return null
     val clean = toEngDigits(dateStr).trim()
       .replace(Regex("(?i)\\bA\\b"), "AM")
       .replace(Regex("(?i)\\bP\\b"), "PM")
@@ -76,37 +77,61 @@ object ArabicNumberHelper {
       .replace("م", "PM")
       .replace("ص", "AM")
     val formats = listOf(
-      "dd/MM/yyyy-HHmm",
-      "dd/MM/yyyy-HH:mm",
-      "dd/MM/yyyy hh:mm a",
-      "dd/MM/yyyy h:mm a",
-      "dd/MM/yyyy hh:mm:ss a",
       "dd/MM/yyyy HH:mm:ss",
       "dd/MM/yyyy HH:mm",
+      "dd/MM/yyyy-HHmm",
+      "dd/MM/yyyy-HH:mm",
+      "dd/MM/yyyy hh:mm:ss a",
+      "dd/MM/yyyy hh:mm a",
+      "dd/MM/yyyy h:mm a",
+      "d/M/yyyy HH:mm:ss",
+      "d/M/yyyy HH:mm",
+      "d/M/yyyy hh:mm:ss a",
+      "d/M/yyyy hh:mm a",
+      "d/M/yyyy h:mm a",
       "dd/MM/yyyy",
+      "d/M/yyyy",
       "yyyy-MM-dd HH:mm:ss",
       "yyyy-MM-dd HH:mm",
+      "yyyy-MM-dd hh:mm:ss a",
       "yyyy-MM-dd hh:mm a",
       "yyyy-MM-dd h:mm a",
-      "yyyy-MM-dd"
+      "yyyy-M-d HH:mm:ss",
+      "yyyy-M-d HH:mm",
+      "yyyy-MM-dd",
+      "yyyy-M-d",
+      "yyyy/MM/dd HH:mm:ss",
+      "yyyy/MM/dd HH:mm",
+      "yyyy/MM/dd",
+      "yyyy/M/d",
+      "dd-MM-yyyy HH:mm:ss",
+      "dd-MM-yyyy HH:mm",
+      "dd-MM-yyyy",
+      "d-M-yyyy"
     )
     for (fmt in formats) {
       try {
         val sdf = SimpleDateFormat(fmt, Locale.US)
-        sdf.isLenient = false
+        sdf.isLenient = true
         val d = sdf.parse(clean)
         if (d != null) return d
       } catch (_: Exception) {}
     }
-    // Also try splitting first token if date is like "11/09/2026 02:38 PM"
+    // Also try splitting first token if date is like "11/09/2026 02:38 PM" or "2026/09/11"
     try {
-      val firstToken = clean.split(" ").firstOrNull()
-      if (firstToken != null && firstToken.contains("/")) {
-        val parts = firstToken.split("/")
-        if (parts.size == 3) {
-          val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
-          val d = sdf.parse(firstToken)
-          if (d != null) return d
+      val firstToken = clean.split(" ").firstOrNull()?.trim()
+      if (firstToken != null) {
+        val delim = if (firstToken.contains("/")) "/" else if (firstToken.contains("-")) "-" else null
+        if (delim != null) {
+          val parts = firstToken.split(delim)
+          if (parts.size == 3) {
+            val isYearFirst = parts[0].length == 4
+            val pattern = if (isYearFirst) "yyyy${delim}M${delim}d" else "d${delim}M${delim}yyyy"
+            val sdf = SimpleDateFormat(pattern, Locale.US)
+            sdf.isLenient = true
+            val d = sdf.parse(firstToken)
+            if (d != null) return d
+          }
         }
       }
     } catch (_: Exception) {}

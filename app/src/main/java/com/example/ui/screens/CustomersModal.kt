@@ -3077,6 +3077,10 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
     var newAddress by remember { mutableStateOf(c.address) }
     val initialTx = c.transactions.firstOrNull { it.type == "افتتاح" }
     val initialAmt = initialTx?.amount ?: if (c.transactions.isEmpty()) c.balance else 0.0
+    val custCurrency = initialTx?.currency?.ifBlank { null }
+      ?: c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
+      ?: uiState.storeConfig.currency.ifBlank { "YER" }
+    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(custCurrency)
     var balanceStr by remember {
       mutableStateOf(if (initialAmt != 0.0) ArabicNumberHelper.toEngDigits(Math.abs(initialAmt).toString().removeSuffix(".0")) else "")
     }
@@ -3125,12 +3129,21 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Text(
-                  "📊 جدول افتتاحي",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 13.sp,
-                  color = Color(0xFF1E293B)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    "📊 جدول افتتاحي",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF1E293B)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    "($custCurrSym)",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    color = Color(0xFF0070BA)
+                  )
+                }
                 Text(
                   if (balanceStr.isBlank() || balanceStr == "0") "متزن (0.00)" else if (isDebit) "حساب مدين (عليه)" else "حساب دائن (له)",
                   fontSize = 11.5.sp,
@@ -3151,7 +3164,7 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
               ) {
                 Text("البيان", modifier = Modifier.weight(1.1f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Text("طبيعة الرصيد", modifier = Modifier.weight(1.5f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                Text("المبلغ", modifier = Modifier.weight(1.4f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text("المبلغ ($custCurrSym)", modifier = Modifier.weight(1.4f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
               }
 
               // Mini Table Body
@@ -3226,30 +3239,43 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
                   }
                 }
 
-                // Cell 3: المبلغ
-                Box(modifier = Modifier.weight(1.4f), contentAlignment = Alignment.Center) {
-                  BasicTextField(
-                    value = balanceStr,
-                    onValueChange = { balanceStr = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    textStyle = TextStyle(
-                      fontSize = 13.5.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = if (isDebit) Color(0xFFC62828) else Color(0xFF2E7D32),
-                      textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    ),
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .background(Color(0xFFF1F5F9), RoundedCornerShape(4.dp))
-                      .border(1.dp, Color(0xFF94A3B8), RoundedCornerShape(4.dp))
-                      .padding(vertical = 5.dp, horizontal = 4.dp),
-                    decorationBox = { innerTextField ->
-                      if (balanceStr.isEmpty()) {
-                        Text("0.00", fontSize = 12.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                // Cell 3: المبلغ مع رمز العملة
+                Row(
+                  modifier = Modifier
+                    .weight(1.4f)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(4.dp))
+                    .border(1.dp, Color(0xFF94A3B8), RoundedCornerShape(4.dp))
+                    .padding(vertical = 4.dp, horizontal = 5.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.Center
+                ) {
+                  Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    BasicTextField(
+                      value = balanceStr,
+                      onValueChange = { balanceStr = it },
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                      singleLine = true,
+                      textStyle = TextStyle(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDebit) Color(0xFFC62828) else Color(0xFF2E7D32),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                      ),
+                      modifier = Modifier.fillMaxWidth(),
+                      decorationBox = { innerTextField ->
+                        if (balanceStr.isEmpty()) {
+                          Text("0.00", fontSize = 12.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        }
+                        innerTextField()
                       }
-                      innerTextField()
-                    }
+                    )
+                  }
+                  Spacer(modifier = Modifier.width(2.dp))
+                  Text(
+                    text = custCurrSym,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF0070BA)
                   )
                 }
               }
@@ -3958,6 +3984,10 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
     var newAddress by remember { mutableStateOf(c.address) }
     val initialTx = c.transactions.firstOrNull { it.type == "افتتاح" }
     val initialAmt = initialTx?.amount ?: if (c.transactions.isEmpty()) c.balance else 0.0
+    val custCurrency = initialTx?.currency?.ifBlank { null }
+      ?: c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
+      ?: uiState.storeConfig.currency.ifBlank { "YER" }
+    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(custCurrency)
     var balanceStr by remember {
       mutableStateOf(if (initialAmt != 0.0) ArabicNumberHelper.toEngDigits(Math.abs(initialAmt).toString().removeSuffix(".0")) else "")
     }
@@ -4006,12 +4036,21 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Text(
-                  "📊 جدول افتتاحي",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 13.sp,
-                  color = Color(0xFF1E293B)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    "📊 جدول افتتاحي",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF1E293B)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    "($custCurrSym)",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    color = Color(0xFF0070BA)
+                  )
+                }
                 Text(
                   if (balanceStr.isBlank() || balanceStr == "0") "متزن (0.00)" else if (isDebit) "حساب مدين (عليه)" else "حساب دائن (له)",
                   fontSize = 11.5.sp,
@@ -4032,7 +4071,7 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
               ) {
                 Text("البيان", modifier = Modifier.weight(1.1f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center)
                 Text("طبيعة الرصيد", modifier = Modifier.weight(1.5f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center)
-                Text("المبلغ", modifier = Modifier.weight(1.4f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center)
+                Text("المبلغ ($custCurrSym)", modifier = Modifier.weight(1.4f), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center)
               }
 
               // Mini Table Body
@@ -4105,29 +4144,42 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
                   }
                 }
 
-                Box(modifier = Modifier.weight(1.4f), contentAlignment = Alignment.Center) {
-                  BasicTextField(
-                    value = balanceStr,
-                    onValueChange = { balanceStr = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    textStyle = TextStyle(
-                      fontSize = 13.5.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = if (isDebit) Color(0xFFC62828) else Color(0xFF2E7D32),
-                      textAlign = TextAlign.Center
-                    ),
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .background(Color(0xFFF1F5F9), RoundedCornerShape(4.dp))
-                      .border(1.dp, Color(0xFF94A3B8), RoundedCornerShape(4.dp))
-                      .padding(vertical = 5.dp, horizontal = 4.dp),
-                    decorationBox = { innerTextField ->
-                      if (balanceStr.isEmpty()) {
-                        Text("0.00", fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Row(
+                  modifier = Modifier
+                    .weight(1.4f)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(4.dp))
+                    .border(1.dp, Color(0xFF94A3B8), RoundedCornerShape(4.dp))
+                    .padding(vertical = 4.dp, horizontal = 5.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.Center
+                ) {
+                  Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    BasicTextField(
+                      value = balanceStr,
+                      onValueChange = { balanceStr = it },
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                      singleLine = true,
+                      textStyle = TextStyle(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDebit) Color(0xFFC62828) else Color(0xFF2E7D32),
+                        textAlign = TextAlign.Center
+                      ),
+                      modifier = Modifier.fillMaxWidth(),
+                      decorationBox = { innerTextField ->
+                        if (balanceStr.isEmpty()) {
+                          Text("0.00", fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        }
+                        innerTextField()
                       }
-                      innerTextField()
-                    }
+                    )
+                  }
+                  Spacer(modifier = Modifier.width(2.dp))
+                  Text(
+                    text = custCurrSym,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF0070BA)
                   )
                 }
               }

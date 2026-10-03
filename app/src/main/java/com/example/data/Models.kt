@@ -31,7 +31,8 @@ data class Customer(
   val phone: String = "",
   val address: String = "",
   val balance: Double = 0.0,
-  val transactions: List<TransactionRecord> = emptyList()
+  val transactions: List<TransactionRecord> = emptyList(),
+  val currency: String = "YER"
 )
 
 data class ExchangeRates(
