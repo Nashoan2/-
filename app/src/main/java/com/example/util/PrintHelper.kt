@@ -609,18 +609,25 @@ object PrintHelper {
         val inBeforeEnd = endCal == null || !tDate.after(endCal.time)
         inAfterStart && inBeforeEnd
       } else {
-        true
+        false
       }
     }
 
-    val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
-      ?: filteredTransactions.firstOrNull { it.currency.isNotBlank() }?.currency
-      ?: "YER"
+    val baseCurrency: String = when {
+      customer.currency.isNotBlank() -> customer.currency
+      customer.transactions.any { it.currency.isNotBlank() } -> customer.transactions.first { it.currency.isNotBlank() }.currency
+      filteredTransactions.any { it.currency.isNotBlank() } -> filteredTransactions.first { it.currency.isNotBlank() }.currency
+      else -> "YER"
+    }
 
     val priorTransactions = customer.transactions.filter { t ->
       if (startCal == null) return@filter false
       val tDate = ArabicNumberHelper.parseDate(t.date)
-      tDate != null && tDate.before(startCal.time)
+      if (tDate != null) {
+        tDate.before(startCal.time)
+      } else {
+        !filteredTransactions.contains(t)
+      }
     }
 
     val priorDebit = priorTransactions.filter {

@@ -182,8 +182,9 @@ fun CustomerStatementDateRangeDialog(
                   color = Color(0xFF666666)
                 )
               }
+              val custCurrSym = ArabicNumberHelper.getCurrencySymbol(customer.currency.ifBlank { customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER" })
               Text(
-                text = "${ArabicNumberHelper.formatAmount(customer.balance)} $",
+                text = "${ArabicNumberHelper.formatAmount(customer.balance)} $custCurrSym",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Black,
                 color = if (customer.balance > 0) Color(0xFFD32F2F) else Color(0xFF28A745)

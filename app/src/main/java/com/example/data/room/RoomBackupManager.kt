@@ -84,7 +84,8 @@ class RoomBackupManager(private val context: Context) {
             name = c.name,
             phone = c.phone,
             address = c.address,
-            balance = c.balance
+            balance = c.balance,
+            currency = c.currency
           )
         }
         customerDao.deleteAllCustomers()
@@ -177,7 +178,8 @@ class RoomBackupManager(private val context: Context) {
           phone = c.phone,
           address = c.address,
           balance = c.balance,
-          transactions = txs
+          transactions = txs,
+          currency = c.currency
         )
       }
     } catch (e: Exception) {

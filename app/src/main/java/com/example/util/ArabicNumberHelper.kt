@@ -69,13 +69,74 @@ object ArabicNumberHelper {
 
   fun parseDate(dateStr: String): Date? {
     if (dateStr.isBlank()) return null
-    val clean = toEngDigits(dateStr).trim()
-      .replace(Regex("(?i)\\bA\\b"), "AM")
-      .replace(Regex("(?i)\\bP\\b"), "PM")
+    var clean = toEngDigits(dateStr).trim()
+
+    // Handle ISO formats with 'T' or milliseconds / timezone
+    clean = clean.replace("T", " ")
+    if (clean.contains(".")) {
+      // If it's a date like 2026-09-15 14:30:00.000 or 15.09.2026
+      val parts = clean.split(" ")
+      if (parts.size == 2 && parts[1].contains(".")) {
+        clean = "${parts[0]} ${parts[1].substringBefore(".")}"
+      }
+    }
+    clean = clean.replace("Z", "").trim()
+
+    // Replace Arabic month names if present
+    clean = clean
+      .replace("يناير", "01")
+      .replace("فبراير", "02")
+      .replace("مارس", "03")
+      .replace("أبريل", "04")
+      .replace("ابريل", "04")
+      .replace("مايو", "05")
+      .replace("يونيو", "06")
+      .replace("يوليو", "07")
+      .replace("أغسطس", "08")
+      .replace("اغسطس", "08")
+      .replace("سبتمبر", "09")
+      .replace("أكتوبر", "10")
+      .replace("اكتوبر", "10")
+      .replace("نوفمبر", "11")
+      .replace("ديسمبر", "12")
+
+    // Remove Arabic day names if present
+    clean = clean
+      .replace("السبت", "")
+      .replace("الأحد", "")
+      .replace("الاحد", "")
+      .replace("الإثنين", "")
+      .replace("الاثنين", "")
+      .replace("الثلاثاء", "")
+      .replace("الأربعاء", "")
+      .replace("الاربعاء", "")
+      .replace("الخميس", "")
+      .replace("الجمعة", "")
+      .replace("،", " ")
+      .replace(",", " ")
+      .trim()
+
+    // Safely replace AM/PM without corrupting words
+    clean = clean
       .replace("مساءً", "PM")
       .replace("صباحاً", "AM")
-      .replace("م", "PM")
-      .replace("ص", "AM")
+      .replace("مساء", "PM")
+      .replace("صباح", "AM")
+      .replace(Regex("(?i)\\bA\\b"), "AM")
+      .replace(Regex("(?i)\\bP\\b"), "PM")
+      .replace(Regex("(?<=\\d|\\s|^)[مpP](?=\\s|$|[\\.,])"), "PM")
+      .replace(Regex("(?<=\\d|\\s|^)[صaA](?=\\s|$|[\\.,])"), "AM")
+
+    // Normalize multiple spaces and spaces around delimiters
+    clean = clean.replace(Regex("\\s+"), " ")
+      .replace(" / ", "/")
+      .replace(" /", "/")
+      .replace("/ ", "/")
+      .replace(" - ", "-")
+      .replace(" -", "-")
+      .replace("- ", "-")
+      .trim()
+
     val formats = listOf(
       "dd/MM/yyyy HH:mm:ss",
       "dd/MM/yyyy HH:mm",
@@ -86,6 +147,8 @@ object ArabicNumberHelper {
       "dd/MM/yyyy h:mm a",
       "d/M/yyyy HH:mm:ss",
       "d/M/yyyy HH:mm",
+      "d/M/yyyy H:m",
+      "dd/MM/yyyy H:m",
       "d/M/yyyy hh:mm:ss a",
       "d/M/yyyy hh:mm a",
       "d/M/yyyy h:mm a",
@@ -107,7 +170,14 @@ object ArabicNumberHelper {
       "dd-MM-yyyy HH:mm:ss",
       "dd-MM-yyyy HH:mm",
       "dd-MM-yyyy",
-      "d-M-yyyy"
+      "d-M-yyyy",
+      "dd.MM.yyyy HH:mm:ss",
+      "dd.MM.yyyy HH:mm",
+      "dd.MM.yyyy",
+      "d.M.yyyy",
+      "yyyy.MM.dd HH:mm:ss",
+      "yyyy.MM.dd HH:mm",
+      "yyyy.MM.dd"
     )
     for (fmt in formats) {
       try {
@@ -121,7 +191,7 @@ object ArabicNumberHelper {
     try {
       val firstToken = clean.split(" ").firstOrNull()?.trim()
       if (firstToken != null) {
-        val delim = if (firstToken.contains("/")) "/" else if (firstToken.contains("-")) "-" else null
+        val delim = if (firstToken.contains("/")) "/" else if (firstToken.contains("-")) "-" else if (firstToken.contains(".")) "." else null
         if (delim != null) {
           val parts = firstToken.split(delim)
           if (parts.size == 3) {

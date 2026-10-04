@@ -132,19 +132,26 @@ fun CustomerStatementScreen(
       val inBeforeEnd = endCal == null || !tDate.after(endCal.time)
       inAfterStart && inBeforeEnd
     } else {
-      true
+      false
     }
   }
 
   // Base currency for multi-currency statement reconciliation
-  val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
-    ?: filteredTransactions.firstOrNull { it.currency.isNotBlank() }?.currency
-    ?: "YER"
+  val baseCurrency: String = when {
+    customer.currency.isNotBlank() -> customer.currency
+    customer.transactions.any { it.currency.isNotBlank() } -> customer.transactions.first { it.currency.isNotBlank() }.currency
+    filteredTransactions.any { it.currency.isNotBlank() } -> filteredTransactions.first { it.currency.isNotBlank() }.currency
+    else -> "YER"
+  }
 
   val priorTransactions = customer.transactions.filter { t ->
     if (startCal == null) return@filter false
     val tDate = ArabicNumberHelper.parseDate(t.date)
-    tDate != null && tDate.before(startCal.time)
+    if (tDate != null) {
+      tDate.before(startCal.time)
+    } else {
+      !filteredTransactions.contains(t)
+    }
   }
 
   val priorDebit = priorTransactions.filter {
@@ -1255,7 +1262,7 @@ fun CustomerStatementScreen(
               horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              val lastCurrency = filteredTransactions.lastOrNull { it.currency.isNotBlank() }?.currency ?: "USD"
+              val lastCurrency = filteredTransactions.lastOrNull { it.currency.isNotBlank() }?.currency ?: baseCurrency
               val debitCurrency = filteredTransactions.filter {
                 it.type == "صرف" || it.type == "فاتورة" || (it.type == "افتتاح" && it.amount > 0)
               }.lastOrNull { it.currency.isNotBlank() }?.currency ?: lastCurrency

@@ -1483,11 +1483,28 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     val cal = Calendar.getInstance()
     cal.time = today
     cal.set(Calendar.DAY_OF_MONTH, 1)
-    val startOfMonthStr = ArabicNumberHelper.formatDateOnly(cal.time)
+    val startOfMonth = cal.time
+    val startOfMonthStr = ArabicNumberHelper.formatDateOnly(startOfMonth)
+
+    val hasTxInCurrentMonth = customer.transactions.any { t ->
+      val d = ArabicNumberHelper.parseDate(t.date)
+      d != null && !d.before(startOfMonth)
+    }
+
+    val defaultStartStr = if (!hasTxInCurrentMonth && customer.transactions.isNotEmpty()) {
+      val earliestDate = customer.transactions.mapNotNull { ArabicNumberHelper.parseDate(it.date) }.minOrNull()
+      if (earliestDate != null) {
+        ArabicNumberHelper.formatDateOnly(earliestDate)
+      } else {
+        "01/01/${cal.get(Calendar.YEAR)}"
+      }
+    } else {
+      startOfMonthStr
+    }
 
     _uiState.value = _uiState.value.copy(
       pendingStatementCustomer = customer,
-      statementStartDate = startOfMonthStr,
+      statementStartDate = defaultStartStr,
       statementEndDate = todayStr,
       showDateRangeDialog = true
     )
@@ -1567,11 +1584,28 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
     val cal = Calendar.getInstance()
     cal.time = today
     cal.set(Calendar.DAY_OF_MONTH, 1)
-    val startOfMonthStr = ArabicNumberHelper.formatDateOnly(cal.time)
+    val startOfMonth = cal.time
+    val startOfMonthStr = ArabicNumberHelper.formatDateOnly(startOfMonth)
+
+    val hasTxInCurrentMonth = customer.transactions.any { t ->
+      val d = ArabicNumberHelper.parseDate(t.date)
+      d != null && !d.before(startOfMonth)
+    }
+
+    val defaultStartStr = if (!hasTxInCurrentMonth && customer.transactions.isNotEmpty()) {
+      val earliestDate = customer.transactions.mapNotNull { ArabicNumberHelper.parseDate(it.date) }.minOrNull()
+      if (earliestDate != null) {
+        ArabicNumberHelper.formatDateOnly(earliestDate)
+      } else {
+        "01/01/${cal.get(Calendar.YEAR)}"
+      }
+    } else {
+      startOfMonthStr
+    }
 
     _uiState.value = _uiState.value.copy(
       pendingStatementCustomer = customer,
-      statementStartDate = startOfMonthStr,
+      statementStartDate = defaultStartStr,
       statementEndDate = todayStr
     )
   }
@@ -1708,7 +1742,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
       phone = ArabicNumberHelper.toEngDigits(phone).trim(),
       address = address.trim(),
       balance = initialBalance,
-      transactions = initialTx
+      transactions = initialTx,
+      currency = currency
     )
     val updated = repository.customers.toMutableList().apply { add(newC) }
     repository.saveCustomers(updated)
@@ -1762,7 +1797,8 @@ class InvoiceViewModel(application: Application) : AndroidViewModel(application)
         name = newName.ifEmpty { c.name },
         phone = ArabicNumberHelper.toEngDigits(newPhone),
         address = newAddress,
-        transactions = updatedTransactions
+        transactions = updatedTransactions,
+        currency = newCurrency ?: c.currency
       )
 
       val recalculatedCustomer = repository.recalculateCustomerBalance(updatedCustomer)

@@ -2896,13 +2896,14 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
               }
 
               // شارة الرصيد
+              val cCurrSym = ArabicNumberHelper.getCurrencySymbol(c.currency.ifBlank { c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER" })
               Surface(
                 color = if (c.balance > 0) Color(0xFFFFEBEE) else Color(0xFFE8F5E9),
                 shape = RoundedCornerShape(6.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (c.balance > 0) Color(0xFFFFCDD2) else Color(0xFFC8E6C9))
               ) {
                 Text(
-                  text = "الرصيد: ${ArabicNumberHelper.formatAmount(c.balance)} $",
+                  text = "الرصيد: ${ArabicNumberHelper.formatAmount(c.balance)} $cCurrSym",
                   fontWeight = FontWeight.ExtraBold,
                   fontSize = 13.sp,
                   color = if (c.balance > 0) Color(0xFFD32F2F) else Color(0xFF2E7D32),
@@ -3033,8 +3034,9 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
               Text("🔢 رقم الحساب: ${c.accountNumber}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
               val bal = c.balance
               val balColor = if (bal > 0) Color(0xFFC62828) else if (bal < 0) Color(0xFF2E7D32) else Color(0xFF495057)
+              val cDelSym = ArabicNumberHelper.getCurrencySymbol(c.currency.ifBlank { c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER" })
               Text(
-                "💰 الرصيد الحالي: ${ArabicNumberHelper.formatAmount(bal)} $",
+                "💰 الرصيد الحالي: ${ArabicNumberHelper.formatAmount(bal)} $cDelSym",
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 13.sp,
                 color = balColor
@@ -3077,10 +3079,14 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
     var newAddress by remember { mutableStateOf(c.address) }
     val initialTx = c.transactions.firstOrNull { it.type == "افتتاح" }
     val initialAmt = initialTx?.amount ?: if (c.transactions.isEmpty()) c.balance else 0.0
-    val custCurrency = initialTx?.currency?.ifBlank { null }
-      ?: c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
-      ?: uiState.storeConfig.currency.ifBlank { "YER" }
-    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(custCurrency)
+    val initialCustCurrency: String = when {
+      c.currency.isNotBlank() -> c.currency
+      initialTx != null && initialTx.currency.isNotBlank() -> initialTx.currency
+      c.transactions.any { it.currency.isNotBlank() } -> c.transactions.first { it.currency.isNotBlank() }.currency
+      else -> "YER"
+    }
+    var newCurrency by remember { mutableStateOf(initialCustCurrency) }
+    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(newCurrency)
     var balanceStr by remember {
       mutableStateOf(if (initialAmt != 0.0) ArabicNumberHelper.toEngDigits(Math.abs(initialAmt).toString().removeSuffix(".0")) else "")
     }
@@ -3091,6 +3097,71 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
       title = { Text("تعديل بيانات العميل: ${c.name}", fontWeight = FontWeight.ExtraBold, color = Color(0xFF111827)) },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          // Row: رقم الحساب والعملة
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFEFF6FF),
+              border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+              modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+              Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text("رقم الحساب:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                Text(c.accountNumber, fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF1D4ED8))
+              }
+            }
+
+            var currMenuExpanded by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.width(115.dp)) {
+              Surface(
+                onClick = { currMenuExpanded = true },
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF1F5F9),
+                border = BorderStroke(1.2.dp, Color(0xFF0070BA)),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = "$newCurrency ($custCurrSym)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF0070BA)
+                  )
+                  Text("▾", fontSize = 12.sp, color = Color(0xFF0070BA), fontWeight = FontWeight.Bold)
+                }
+              }
+              DropdownMenu(
+                expanded = currMenuExpanded,
+                onDismissRequest = { currMenuExpanded = false }
+              ) {
+                DropdownMenuItem(
+                  text = { Text("YER (ريال يمني)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "YER"; currMenuExpanded = false }
+                )
+                DropdownMenuItem(
+                  text = { Text("SAR (ريال سعودي)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "SAR"; currMenuExpanded = false }
+                )
+                DropdownMenuItem(
+                  text = { Text("$ (دولار أمريكي)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "$"; currMenuExpanded = false }
+                )
+              }
+            }
+          }
+
           OutlinedTextField(
             value = newName,
             onValueChange = { newName = it },
@@ -3288,7 +3359,7 @@ fun TabAllCustomers(viewModel: InvoiceViewModel, onDismiss: () -> Unit = {}) {
           onClick = {
             val parsedAmt = ArabicNumberHelper.toEngDigits(balanceStr).toDoubleOrNull() ?: 0.0
             val finalInitialBal = if (isDebit) parsedAmt else -parsedAmt
-            viewModel.editCustomer(c.accountNumber, newName, newPhone, newAddress, finalInitialBal)
+            viewModel.editCustomer(c.accountNumber, newName, newPhone, newAddress, finalInitialBal, newCurrency)
             editingCustomer = null
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF28A745))
@@ -3801,6 +3872,7 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
 
               // شارة الرصيد مع توضيح مدين / دائن
               val isDebit = c.balance > 0
+              val cCurrSym = ArabicNumberHelper.getCurrencySymbol(c.currency.ifBlank { c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER" })
               Surface(
                 color = if (isDebit) Color(0xFFFFEBEE) else Color(0xFFE8F5E9),
                 shape = RoundedCornerShape(6.dp),
@@ -3811,7 +3883,7 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
                   horizontalAlignment = Alignment.End
                 ) {
                   Text(
-                    text = "${ArabicNumberHelper.formatAmount(Math.abs(c.balance))} $",
+                    text = "${ArabicNumberHelper.formatAmount(Math.abs(c.balance))} $cCurrSym",
                     fontWeight = FontWeight.Black,
                     fontSize = 13.5.sp,
                     color = if (isDebit) Color(0xFFD32F2F) else Color(0xFF2E7D32)
@@ -3984,10 +4056,14 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
     var newAddress by remember { mutableStateOf(c.address) }
     val initialTx = c.transactions.firstOrNull { it.type == "افتتاح" }
     val initialAmt = initialTx?.amount ?: if (c.transactions.isEmpty()) c.balance else 0.0
-    val custCurrency = initialTx?.currency?.ifBlank { null }
-      ?: c.transactions.firstOrNull { it.currency.isNotBlank() }?.currency
-      ?: uiState.storeConfig.currency.ifBlank { "YER" }
-    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(custCurrency)
+    val initialCustCurrency: String = when {
+      c.currency.isNotBlank() -> c.currency
+      initialTx != null && initialTx.currency.isNotBlank() -> initialTx.currency
+      c.transactions.any { it.currency.isNotBlank() } -> c.transactions.first { it.currency.isNotBlank() }.currency
+      else -> "YER"
+    }
+    var newCurrency by remember { mutableStateOf(initialCustCurrency) }
+    val custCurrSym = ArabicNumberHelper.getCurrencySymbol(newCurrency)
     var balanceStr by remember {
       mutableStateOf(if (initialAmt != 0.0) ArabicNumberHelper.toEngDigits(Math.abs(initialAmt).toString().removeSuffix(".0")) else "")
     }
@@ -3998,6 +4074,71 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
       title = { Text("تعديل بيانات العميل: ${c.name}", fontWeight = FontWeight.ExtraBold, color = Color(0xFF111827)) },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          // Row: رقم الحساب والعملة
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFEFF6FF),
+              border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+              modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+              Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text("رقم الحساب:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                Text(c.accountNumber, fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF1D4ED8))
+              }
+            }
+
+            var currMenuExpanded by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.width(115.dp)) {
+              Surface(
+                onClick = { currMenuExpanded = true },
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF1F5F9),
+                border = BorderStroke(1.2.dp, Color(0xFF0070BA)),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = "$newCurrency ($custCurrSym)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF0070BA)
+                  )
+                  Text("▾", fontSize = 12.sp, color = Color(0xFF0070BA), fontWeight = FontWeight.Bold)
+                }
+              }
+              DropdownMenu(
+                expanded = currMenuExpanded,
+                onDismissRequest = { currMenuExpanded = false }
+              ) {
+                DropdownMenuItem(
+                  text = { Text("YER (ريال يمني)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "YER"; currMenuExpanded = false }
+                )
+                DropdownMenuItem(
+                  text = { Text("SAR (ريال سعودي)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "SAR"; currMenuExpanded = false }
+                )
+                DropdownMenuItem(
+                  text = { Text("$ (دولار أمريكي)", fontWeight = FontWeight.Black, fontSize = 13.sp) },
+                  onClick = { newCurrency = "$"; currMenuExpanded = false }
+                )
+              }
+            }
+          }
+
           OutlinedTextField(
             value = newName,
             onValueChange = { newName = it },
@@ -4192,7 +4333,7 @@ fun TabCustomersWithBalancesOnly(viewModel: InvoiceViewModel, onDismiss: () -> U
         onClick = {
           val parsedAmt = ArabicNumberHelper.toEngDigits(balanceStr).toDoubleOrNull() ?: 0.0
           val finalInitialBal = if (isDebit) parsedAmt else -parsedAmt
-          viewModel.editCustomer(c.accountNumber, newName, newPhone, newAddress, finalInitialBal)
+          viewModel.editCustomer(c.accountNumber, newName, newPhone, newAddress, finalInitialBal, newCurrency)
           editingCustomer = null
         },
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF28A745))
@@ -4348,8 +4489,9 @@ fun TabCustomerStatement(viewModel: InvoiceViewModel, onDismiss: () -> Unit) {
             Text(customer.name, fontWeight = FontWeight.Bold, color = Color(0xFF1A237E), fontSize = 14.sp)
             Text("حساب: ${customer.accountNumber} | هاتف: ${customer.phone.ifEmpty { "—" }}", fontSize = 12.sp, color = Color.Gray)
           }
+          val cCurrSym = ArabicNumberHelper.getCurrencySymbol(customer.currency.ifBlank { customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER" })
           Text(
-            "${ArabicNumberHelper.formatAmount(customer.balance)} $",
+            "${ArabicNumberHelper.formatAmount(customer.balance)} $cCurrSym",
             fontWeight = FontWeight.ExtraBold,
             fontSize = 14.sp,
             color = if (customer.balance > 0) Color(0xFFD32F2F) else Color(0xFF28A745)

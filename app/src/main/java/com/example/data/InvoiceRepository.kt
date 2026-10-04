@@ -632,6 +632,9 @@ class InvoiceRepository(context: Context) {
             )
           }
         }
+        val custCurrency = obj.optString("currency", "").ifBlank {
+          txList.firstOrNull { it.currency.isNotBlank() }?.currency ?: "YER"
+        }
         list.add(
           Customer(
             id = obj.optLong("id", System.currentTimeMillis()),
@@ -640,7 +643,8 @@ class InvoiceRepository(context: Context) {
             phone = obj.optString("phone"),
             address = obj.optString("address"),
             balance = obj.optDouble("balance", 0.0),
-            transactions = txList
+            transactions = txList,
+            currency = custCurrency
           )
         )
       }
@@ -676,6 +680,7 @@ class InvoiceRepository(context: Context) {
         put("phone", c.phone)
         put("address", c.address)
         put("balance", c.balance)
+        put("currency", c.currency)
         val txArray = JSONArray()
         for (t in c.transactions) {
           txArray.put(JSONObject().apply {
@@ -740,7 +745,9 @@ class InvoiceRepository(context: Context) {
     }
 
     val currentGlobalRates = try { exchangeRates } catch (_: Throwable) { null } ?: loadExchangeRates()
-    val baseCurrency = customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "$"
+    val baseCurrency = customer.currency.ifBlank {
+      customer.transactions.firstOrNull { it.currency.isNotBlank() }?.currency ?: "$"
+    }
 
     var currentBalanceInBase = 0.0
     val updatedTransactions = customer.transactions.map { t ->
